@@ -40,12 +40,9 @@ func (mp *MessagePusher) Start() {
 	go func() {
 		for {
 			message := <-mp.MesssageChannel
-			pqm := PQMessage{
-				Message:  message,
-				Priority: int(message.Type),
-			}
+			pqm := NewPQMessage(message)
 
-			mp.messageQueue.SafePush(&pqm)
+			mp.messageQueue.SafePush(pqm)
 		}
 	}()
 }

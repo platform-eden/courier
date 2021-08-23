@@ -35,10 +35,3 @@ func NewMessage(mt MessageType, subject string, content []byte) Message {
 
 	return m
 }
-
-// A Message that can be managed by our priority queue
-type PQMessage struct {
-	Message
-	Priority int // The priority of the item in the queue.
-	Index    int // The index of the item in the heap.
-}
