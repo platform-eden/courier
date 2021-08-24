@@ -25,7 +25,7 @@ func getMageDir() string {
 	return dir
 }
 
-// places updated protofiles for client and server
+// updates grpc boilerplate
 func Proto() error {
 	protoPath := filepath.Join(baseDir, "proto")
 
@@ -50,6 +50,22 @@ func Proto() error {
 			}
 		}
 	}
+
+	return nil
+}
+
+// runs unit tests
+func UnitTest() error {
+	internalDir := filepath.Join(baseDir, "internal")
+
+	os.Chdir(internalDir)
+
+	err := sh.Run("go", "test", "-race", "-covermode=atomic", "-coverprofile=coverage.out", "./...")
+	if err != nil {
+		return fmt.Errorf("server failed testing: %s", err)
+	}
+
+	os.Rename(filepath.Join(internalDir, "coverage.out"), filepath.Join(baseDir, "coverage.out"))
 
 	return nil
 }

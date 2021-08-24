@@ -4,16 +4,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// the types of message that can be created
-// assigned based on what kind interaction the sender of the message wants with receiver
-type MessageType int
-
-const (
-	PubMessage MessageType = iota
-	ReqMessage
-	RespMessage
-)
-
 // a message that is sent between nodes
 // each message has a unique id to connect request messages with response messages
 // subject describes the content of the message

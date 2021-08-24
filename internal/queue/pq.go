@@ -6,6 +6,7 @@ import (
 
 type PriorityQueuer interface {
 	Len() int
+	safeLen() int
 	safePop() (*PQMessage, bool)
 	safePush(*PQMessage)
 	empty()
@@ -89,6 +90,13 @@ func (pq *PriorityQueue) safePop() (*PQMessage, bool) {
 	message := heap.Pop(pq).(*PQMessage)
 
 	return message, true
+}
+
+func (pq *PriorityQueue) safeLen() int {
+	pq.lock.lock()
+	defer pq.lock.unlock()
+
+	return len(pq.Queue)
 }
 
 // empties the queue

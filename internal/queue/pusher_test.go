@@ -33,7 +33,7 @@ func TestNewQueuePusher(t *testing.T) {
 }
 
 func TestQueuePusher_Listen(t *testing.T) {
-	pq := NewMockPriorityQueue()
+	pq := newPriorityQueue()
 
 	mp, err := newQueuePusher(pq)
 	if err != nil {
@@ -54,7 +54,7 @@ func TestQueuePusher_Listen(t *testing.T) {
 		mchan <- message
 	}
 
-	queueLength := mp.messageQueue.Len()
+	queueLength := mp.messageQueue.safeLen()
 	if queueLength != len(messageList) {
 		log.Fatalf("incorrect length of queue. Expected %v but got %v", len(messageList), queueLength)
 	}
