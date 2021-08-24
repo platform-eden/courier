@@ -1,4 +1,4 @@
-package registrar
+package queue
 
 import (
 	"runtime"
@@ -7,8 +7,8 @@ import (
 )
 
 type Locker interface {
-	Lock()
-	Unlock()
+	lock()
+	unlock()
 }
 
 // a ticket lock implementation
@@ -21,7 +21,7 @@ type TicketLock struct {
 }
 
 // creates a new TicketLock starting at ticket 0
-func NewTicketLock() *TicketLock {
+func newTicketLock() *TicketLock {
 
 	l := TicketLock{
 		ticket: 0,
@@ -32,7 +32,7 @@ func NewTicketLock() *TicketLock {
 }
 
 // waits until the goroutine's ticket equals the next ticket to be served
-func (tl *TicketLock) Lock() {
+func (tl *TicketLock) lock() {
 	t := atomic.AddUint64(&tl.ticket, 1) - 1
 	for atomic.LoadUint64(&tl.next) != t {
 		runtime.Gosched()
@@ -40,6 +40,6 @@ func (tl *TicketLock) Lock() {
 }
 
 // signals a completion of a ticket and makes the lock available for the next ticket
-func (tl *TicketLock) Unlock() {
+func (tl *TicketLock) unlock() {
 	atomic.AddUint64(&tl.next, 1)
 }

@@ -1,0 +1,30 @@
+syntax = "proto3";
+package messenger;
+
+option go_package = "internal/messenger";
+
+message Participant {
+    string id = 1;
+    string address = 2;
+    string port = 3;
+    bool sender = 4;
+}
+
+message Message {
+    string id = 1;
+    int32 type = 2;
+    repeated Participant participants = 3;
+    string subject = 4;
+    bytes content = 5; 
+}
+
+message SendMessageRequest {
+    Message message = 1;
+}
+
+// in case returns are actually needed in the future
+message SendMessageResponse{}
+
+service MessageServer {
+    rpc SendMessage (SendMessageRequest) returns (SendMessageResponse){}
+}

@@ -1,9 +1,9 @@
-package registrar
+package queue
 
 import "testing"
 
 func TestNewTicketLock(t *testing.T) {
-	tl := NewTicketLock()
+	tl := newTicketLock()
 
 	if tl.ticket != 0 || tl.next != 0 {
 		t.Fatal("ticket and next need to equal zero when instantiated")
@@ -11,12 +11,12 @@ func TestNewTicketLock(t *testing.T) {
 }
 
 func TestTicketLock_Lock(t *testing.T) {
-	tl := NewTicketLock()
-	defer tl.Unlock()
+	tl := newTicketLock()
+	defer tl.unlock()
 
 	startTicket := tl.ticket
 	startNext := tl.next
-	tl.Lock()
+	tl.lock()
 	lockTicket := tl.ticket
 	lockNext := tl.next
 
@@ -30,14 +30,13 @@ func TestTicketLock_Lock(t *testing.T) {
 }
 
 func TestTicketLock_Unlock(t *testing.T) {
-	tl := NewTicketLock()
-	defer tl.Unlock()
+	tl := newTicketLock()
 
-	tl.Lock()
+	tl.lock()
 	lockTicket := tl.ticket
 	lockNext := tl.next
 
-	tl.Unlock()
+	tl.unlock()
 	unlockTicket := tl.ticket
 	unlockNext := tl.next
 
