@@ -62,10 +62,24 @@ func UnitTest() error {
 
 	err := sh.Run("go", "test", "-race", "-covermode=atomic", "-coverprofile=coverage.out", "./...")
 	if err != nil {
-		return fmt.Errorf("server failed testing: %s", err)
+		return fmt.Errorf("failed unit test: %s", err)
 	}
 
 	os.Rename(filepath.Join(internalDir, "coverage.out"), filepath.Join(baseDir, "coverage.out"))
+
+	return nil
+}
+
+// formats go code
+func Fmt() error {
+	internalDir := filepath.Join(baseDir, "internal")
+
+	os.Chdir(internalDir)
+
+	err := sh.Run("go", "fmt", "./...")
+	if err != nil {
+		return fmt.Errorf("failed formatting: %s", err)
+	}
 
 	return nil
 }
