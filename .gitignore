@@ -1,3 +1,4 @@
 main.go
 /temp/*
 coverage.out
+.vscode
