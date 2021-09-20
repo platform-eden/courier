@@ -24,7 +24,7 @@ func TestQueueHandler_SubscribeAndPush(t *testing.T) {
 	pop := qh.Subscribe("test")
 	push := qh.PushChannel()
 
-	m := message.NewPubMessage([]*message.Participant{}, "test", []byte("test"))
+	m := message.NewPubMessage("test", []byte("test"))
 
 	push <- m
 

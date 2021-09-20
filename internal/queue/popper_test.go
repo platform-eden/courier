@@ -11,7 +11,7 @@ func TestNewQueuePopper(t *testing.T) {
 	pq := newPriorityQueue()
 
 	m1 := PQMessage{
-		Message:  message.NewPubMessage([]*message.Participant{}, "test", []byte("test")),
+		Message:  message.NewPubMessage("test", []byte("test")),
 		Priority: int(message.PubMessage),
 	}
 
@@ -44,7 +44,7 @@ func TestQueuePopper_Subscribe(t *testing.T) {
 
 	go func() {
 		m1 := PQMessage{
-			Message:  message.NewPubMessage([]*message.Participant{}, "test", []byte("test")),
+			Message:  message.NewPubMessage("test", []byte("test")),
 			Priority: int(message.PubMessage),
 		}
 
@@ -69,7 +69,7 @@ func TestQueuePopper_Send(t *testing.T) {
 		t.Fatalf("could not create message popper: %s", err)
 	}
 
-	m1 := message.NewPubMessage([]*message.Participant{}, "test", []byte("test"))
+	m1 := message.NewPubMessage("test", []byte("test"))
 
 	err = mp.send(m1)
 	if err == nil {

@@ -12,7 +12,7 @@ func TestNewQueuePusher(t *testing.T) {
 	pq := newPriorityQueue()
 
 	m1 := PQMessage{
-		Message:  message.NewPubMessage([]*message.Participant{}, "test", []byte("test")),
+		Message:  message.NewPubMessage("test", []byte("test")),
 		Priority: int(message.PubMessage),
 	}
 
@@ -42,9 +42,9 @@ func TestQueuePusher_Listen(t *testing.T) {
 
 	mp.start()
 
-	m1 := message.NewPubMessage([]*message.Participant{}, "test", []byte("test"))
-	m2 := message.NewReqMessage([]*message.Participant{}, "test", []byte("test"))
-	m3 := message.NewRespMessage(uuid.NewString(), []*message.Participant{}, "test", []byte("test"))
+	m1 := message.NewPubMessage("test", []byte("test"))
+	m2 := message.NewReqMessage("test", []byte("test"))
+	m3 := message.NewRespMessage(uuid.NewString(), "test", []byte("test"))
 
 	messageList := []message.Message{m1, m2, m3}
 

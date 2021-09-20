@@ -7,7 +7,7 @@ import (
 )
 
 func TestNewPubMessage(t *testing.T) {
-	m := NewPubMessage([]*Participant{}, "test", []byte("test"))
+	m := NewPubMessage("test", []byte("test"))
 
 	if m.Id == "" {
 		t.Fatal("expected PubMessage to set id")
@@ -19,7 +19,7 @@ func TestNewPubMessage(t *testing.T) {
 }
 
 func TestNewReqMessage(t *testing.T) {
-	m := NewReqMessage([]*Participant{}, "test", []byte("test"))
+	m := NewReqMessage("test", []byte("test"))
 
 	if m.Id == "" {
 		t.Fatal("expected PubMessage to set id")
@@ -31,7 +31,7 @@ func TestNewReqMessage(t *testing.T) {
 }
 
 func TestNewRespMessage(t *testing.T) {
-	m := NewRespMessage(uuid.NewString(), []*Participant{}, "test", []byte("test"))
+	m := NewRespMessage(uuid.NewString(), "test", []byte("test"))
 
 	if m.Type != RespMessage {
 		t.Fatalf("expected ReqMessage but got %s", m.Type)
