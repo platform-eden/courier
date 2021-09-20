@@ -1,30 +1,48 @@
 syntax = "proto3";
 package messenger;
 
-option go_package = "internal/messenger";
+option go_package = "internal/proto";
 
-message Participant {
+message PublishMessage {
     string id = 1;
-    string address = 2;
-    string port = 3;
-    bool sender = 4;
+    string subject = 2;
+    bytes content = 3; 
 }
 
-message Message {
+message RequestMessage {
     string id = 1;
-    int32 type = 2;
-    repeated Participant participants = 3;
-    string subject = 4;
-    bytes content = 5; 
+    string node = 2;
+    string subject = 3;
+    bytes content = 4; 
 }
 
-message SendMessageRequest {
-    Message message = 1;
+message ResponseMessage {
+    string id = 1;
+    string node = 2;
+    string subject = 3;
+    bytes content = 4; 
 }
+
+message PublishMessageRequest {
+    PublishMessage message = 1;
+}
+
+message RequestMessageRequest {
+    RequestMessage message = 1;
+}
+
+message ResponseMessageRequest {
+    ResponseMessage message = 1;
+}
+
 
 // in case returns are actually needed in the future
-message SendMessageResponse{}
+message PublishMessageResponse{}
+message RequestMessageResponse{}
+message ResponseMessageResponse{}
 
 service MessageServer {
-    rpc SendMessage (SendMessageRequest) returns (SendMessageResponse){}
+    rpc PublishMessage (PublishMessageRequest) returns (PublishMessageResponse){}
+    rpc RequestMessage (RequestMessageRequest) returns (RequestMessageResponse){}
+    rpc ResponseMessage (ResponseMessageRequest) returns (ResponseMessageResponse){}
 }
