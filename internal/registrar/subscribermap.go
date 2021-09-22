@@ -1,6 +1,8 @@
 package registrar
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type SubscriberMap struct {
 	subscribers map[string][]*Node
@@ -22,15 +24,13 @@ func (s *SubscriberMap) AddSubscriber(subscriber *Node) {
 	s.lock.lock()
 	defer s.lock.unlock()
 
-	go func() {
-		for _, subject := range subscriber.SubscribedSubjects {
-			_, exists := findSubscriber(s.subscribers[subject], subscriber.Id)
+	for _, subject := range subscriber.SubscribedSubjects {
+		_, exists := findSubscriber(s.subscribers[subject], subscriber.Id)
 
-			if !exists {
-				s.subscribers[subject] = append(s.subscribers[subject], subscriber)
-			}
+		if !exists {
+			s.subscribers[subject] = append(s.subscribers[subject], subscriber)
 		}
-	}()
+	}
 }
 
 // Removes a subscriber from all of the subjects it subscribed to.
@@ -38,20 +38,19 @@ func (s *SubscriberMap) RemoveSubscriber(subscriber *Node) {
 	s.lock.lock()
 	defer s.lock.unlock()
 
-	go func() {
-		for _, subject := range subscriber.SubscribedSubjects {
-			i, exists := findSubscriber(s.subscribers[subject], subscriber.Id)
+	for _, subject := range subscriber.SubscribedSubjects {
+		i, exists := findSubscriber(s.subscribers[subject], subscriber.Id)
 
-			if exists {
-				nodes, err := removeSubscriber(s.subscribers[subject], i)
-				if err != nil {
-					panic(err)
-				}
+		if exists {
+			if len(s.subscribers[subject]) == 1 {
+				delete(s.subscribers, subject)
+			} else {
+				nodes, _ := removeSubscriberFromSubject(s.subscribers[subject], i)
 
 				s.subscribers[subject] = nodes
 			}
 		}
-	}()
+	}
 }
 
 // Takes a subject and returns all of nodes subscribed to that subject.
@@ -63,16 +62,23 @@ func (s *SubscriberMap) SubjectSubscribers(subject string) []*Node {
 }
 
 // Returns a unique list containing all of this nodes Subscribers.
-func (s *SubscriberMap) GetAllSubscribers() []*Node {
+func (s *SubscriberMap) AllSubscribers() []*Node {
 	s.lock.lock()
 	defer s.lock.unlock()
 
-	var allsubs []*Node
+	uniquesubs := []*Node{}
+	subMap := make(map[string]bool)
 	for _, subscribers := range s.subscribers {
-		allsubs = append(allsubs, subscribers...)
+		for _, subscriber := range subscribers {
+			_, ok := subMap[subscriber.Id]
+			if !ok {
+				subMap[subscriber.Id] = true
+				uniquesubs = append(uniquesubs, subscriber)
+			}
+		}
 	}
 
-	return uniqueSubscribers(allsubs)
+	return uniquesubs
 }
 
 // checks if subscriber is listed under a subject.  If it exists, this returns the postion.
@@ -88,26 +94,10 @@ func findSubscriber(subscribers []*Node, id string) (int, bool) {
 }
 
 // Removes the node at the given position from the given node list.
-func removeSubscriber(nodes []*Node, position int) ([]*Node, error) {
+func removeSubscriberFromSubject(nodes []*Node, position int) ([]*Node, error) {
 	if position < 0 || position > len(nodes) {
 		return nil, fmt.Errorf("expected position to fall within range of %v but got %v", len(nodes), position)
 	}
 	nodes[position] = nodes[len(nodes)-1]
 	return nodes[:len(nodes)-1], nil
-}
-
-// Takes a list of Nodes and returns a unique list
-func uniqueSubscribers(subscribers []*Node) []*Node {
-	subMap := make(map[string]*Node)
-	for _, subscriber := range subscribers {
-		subMap[subscriber.Id] = subscriber
-	}
-
-	var uniquesubs []*Node
-
-	for _, subscriber := range subMap {
-		uniquesubs = append(uniquesubs, subscriber)
-	}
-
-	return uniquesubs
 }
