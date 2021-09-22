@@ -11,16 +11,16 @@ message PublishMessage {
 
 message RequestMessage {
     string id = 1;
-    string node = 2;
-    string subject = 3;
-    bytes content = 4; 
+    string returnAddress = 2;
+    string returnPort = 3;
+    string subject = 4;
+    bytes content = 5; 
 }
 
 message ResponseMessage {
     string id = 1;
-    string node = 2;
-    string subject = 3;
-    bytes content = 4; 
+    string subject = 2;
+    bytes content = 3; 
 }
 
 message PublishMessageRequest {

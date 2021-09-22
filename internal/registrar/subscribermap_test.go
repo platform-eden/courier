@@ -44,7 +44,10 @@ func TestSubscriberMap_RemoveSubscriber(t *testing.T) {
 		subMap.subscribers[subject] = append(subMap.subscribers[subject], node2)
 	}
 
-	subMap.RemoveSubscriber(node1)
+	err := subMap.RemoveSubscriber(node1)
+	if err != nil {
+		t.Fatalf("expected remove subscriber to pass but it failed: %s", err)
+	}
 
 	for _, subject := range subjects {
 		sublist, ok := subMap.subscribers[subject]
@@ -57,7 +60,10 @@ func TestSubscriberMap_RemoveSubscriber(t *testing.T) {
 		}
 	}
 
-	subMap.RemoveSubscriber(node2)
+	err = subMap.RemoveSubscriber(node2)
+	if err != nil {
+		t.Fatalf("expected remove subscriber to pass but it failed: %s", err)
+	}
 
 	for _, subject := range subjects {
 		_, ok := subMap.subscribers[subject]
@@ -86,8 +92,19 @@ func TestSubscriberMap_SubjectSubscribers(t *testing.T) {
 		}
 	}
 
-	subscribers := subMap.SubjectSubscribers("sub")
-	subscribers1 := subMap.SubjectSubscribers("sub1")
+	subscribers, err := subMap.SubjectSubscribers("sub")
+	if err != nil {
+		t.Fatalf("expected getting subscribers to pass but it failed: %s", err)
+	}
+	subscribers1, err := subMap.SubjectSubscribers("sub1")
+	if err != nil {
+		t.Fatalf("expected getting subscribers to pass but it failed: %s", err)
+	}
+
+	_, err = subMap.SubjectSubscribers("sub2")
+	if err == nil {
+		t.Fatal("expected getting subscribers to fail when fetching nonexistant subject but it passed")
+	}
 
 	if len(subscribers) != len(subnodes) {
 		t.Fatalf("expected list of subscribers to have a length of %v but got %v", len(subnodes), len(subscribers))

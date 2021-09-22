@@ -34,7 +34,7 @@ func (s *SubscriberMap) AddSubscriber(subscriber *Node) {
 }
 
 // Removes a subscriber from all of the subjects it subscribed to.
-func (s *SubscriberMap) RemoveSubscriber(subscriber *Node) {
+func (s *SubscriberMap) RemoveSubscriber(subscriber *Node) error {
 	s.lock.lock()
 	defer s.lock.unlock()
 
@@ -45,20 +45,30 @@ func (s *SubscriberMap) RemoveSubscriber(subscriber *Node) {
 			if len(s.subscribers[subject]) == 1 {
 				delete(s.subscribers, subject)
 			} else {
-				nodes, _ := removeSubscriberFromSubject(s.subscribers[subject], i)
+				nodes, err := removeSubscriberFromSubject(s.subscribers[subject], i)
+				if err != nil {
+					return fmt.Errorf("could not remove subscriber from %s: %s", subject, err)
+				}
 
 				s.subscribers[subject] = nodes
 			}
 		}
 	}
+
+	return nil
 }
 
 // Takes a subject and returns all of nodes subscribed to that subject.
-func (s *SubscriberMap) SubjectSubscribers(subject string) []*Node {
+func (s *SubscriberMap) SubjectSubscribers(subject string) ([]*Node, error) {
 	s.lock.lock()
 	defer s.lock.unlock()
 
-	return s.subscribers[subject]
+	subscribers, ok := s.subscribers[subject]
+	if !ok {
+		return nil, fmt.Errorf("subject %s does not exist", subject)
+	}
+
+	return subscribers, nil
 }
 
 // Returns a unique list containing all of this nodes Subscribers.
