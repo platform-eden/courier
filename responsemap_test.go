@@ -1,4 +1,4 @@
-package registrar
+package courier
 
 import "testing"
 

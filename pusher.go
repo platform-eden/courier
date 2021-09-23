@@ -1,46 +1,44 @@
-package queue
+package courier
 
 import (
 	"fmt"
 	"time"
-
-	"github.com/platform-eden/courier/internal/message"
 )
 
-type Pusher interface {
+type pusher interface {
 	start()
-	pushChannel() chan message.Message
+	pushChannel() chan Message
 }
 
 // handles incoming Messages for a priority queue
 // instead of potential pushers pushing directly to the queue, the pusher listens on a channel that
 // it makes available for other processes
-type QueuePusher struct {
-	messageQueue    PriorityQueuer
-	messsageChannel chan (message.Message)
+type queuePusher struct {
+	messageQueue    priorityQueuer
+	messsageChannel chan (Message)
 	StopChannel     chan (int)
 }
 
-// takes a PriorityQueuer and returns a QueuePusher
-// PriorityQueuer must be empty to successfully create the QueuePusher
-func newQueuePusher(pq PriorityQueuer) (*QueuePusher, error) {
+// takes a priorityQueuer and returns a queuePusher
+// priorityQueuer must be empty to successfully create the queuePusher
+func newQueuePusher(pq priorityQueuer) (*queuePusher, error) {
 	pqLength := pq.Len()
 
 	if pqLength != 0 {
 		return nil, fmt.Errorf("expected PriorityQuerer's queue length to be zero but got %v", pqLength)
 	}
 
-	mp := QueuePusher{
+	mp := queuePusher{
 		messageQueue:    pq,
-		messsageChannel: make(chan message.Message),
+		messsageChannel: make(chan Message),
 	}
 
 	return &mp, nil
 }
 
-// starts a concurrent process that listens for new messages sent through the QueuePusher's channel and
+// starts a concurrent process that listens for new messages sent through the queuePusher's channel and
 // pushes them into the Priority Queue
-func (qp *QueuePusher) start() {
+func (qp *queuePusher) start() {
 	fmt.Printf("%v pusher started\n", time.Now().Format(time.RFC3339))
 	go func() {
 		for {
@@ -53,6 +51,6 @@ func (qp *QueuePusher) start() {
 }
 
 // returns the channel that the pusher receives messages on
-func (qp *QueuePusher) pushChannel() chan message.Message {
+func (qp *queuePusher) pushChannel() chan Message {
 	return qp.messsageChannel
 }

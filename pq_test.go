@@ -1,10 +1,9 @@
-package queue
+package courier
 
 import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/platform-eden/courier/internal/message"
 )
 
 func TestNewPriorityQueue(t *testing.T) {
@@ -16,10 +15,10 @@ func TestNewPriorityQueue(t *testing.T) {
 }
 
 func TestPriorityQueue_SafePush(t *testing.T) {
-	m := &PQMessage{
-		Message: message.Message{
+	m := &pqMessage{
+		Message: Message{
 			Id:      uuid.NewString(),
-			Type:    message.PubMessage,
+			Type:    PubMessage,
 			Subject: "test",
 			Content: []byte("test"),
 		},
@@ -43,37 +42,37 @@ func TestPriorityQueue_SafePop(t *testing.T) {
 		t.Fatalf("expected popped to be false but got %v", popped)
 	}
 
-	m1 := &PQMessage{
-		Message: message.Message{
+	m1 := &pqMessage{
+		Message: Message{
 			Id:      uuid.NewString(),
-			Type:    message.PubMessage,
+			Type:    PubMessage,
 			Subject: "test",
 			Content: []byte("test"),
 		},
-		Priority: int(message.PubMessage),
+		Priority: int(PubMessage),
 	}
 
-	m2 := &PQMessage{
-		Message: message.Message{
+	m2 := &pqMessage{
+		Message: Message{
 			Id:      uuid.NewString(),
-			Type:    message.ReqMessage,
+			Type:    ReqMessage,
 			Subject: "test",
 			Content: []byte("test"),
 		},
-		Priority: int(message.ReqMessage),
+		Priority: int(ReqMessage),
 	}
 
-	m3 := &PQMessage{
-		Message: message.Message{
+	m3 := &pqMessage{
+		Message: Message{
 			Id:      uuid.NewString(),
-			Type:    message.RespMessage,
+			Type:    RespMessage,
 			Subject: "test",
 			Content: []byte("test"),
 		},
-		Priority: int(message.RespMessage),
+		Priority: int(RespMessage),
 	}
 
-	messageList := []*PQMessage{m2, m3, m1, m2}
+	messageList := []*pqMessage{m2, m3, m1, m2}
 
 	for _, m := range messageList {
 		pq.safePush(m)
@@ -84,7 +83,7 @@ func TestPriorityQueue_SafePop(t *testing.T) {
 		t.Fatal("expected popped to be true but got false")
 	}
 
-	if m.Message.Type != message.RespMessage {
-		t.Fatalf("expected type %v but got %v", message.RespMessage, m.Message.Type)
+	if m.Message.Type != RespMessage {
+		t.Fatalf("expected type %v but got %v", RespMessage, m.Message.Type)
 	}
 }

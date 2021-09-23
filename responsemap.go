@@ -1,10 +1,10 @@
-package registrar
+package courier
 
 import "fmt"
 
-type ResponseMap struct {
+type responseMap struct {
 	responses map[string]*ResponseInfo
-	lock      *TicketLock
+	lock      *ticketLock
 }
 
 type ResponseInfo struct {
@@ -12,8 +12,8 @@ type ResponseInfo struct {
 	Port    string
 }
 
-func NewResponseMap() *ResponseMap {
-	r := ResponseMap{
+func NewResponseMap() *responseMap {
+	r := responseMap{
 		responses: make(map[string]*ResponseInfo),
 		lock:      newTicketLock(),
 	}
@@ -21,7 +21,7 @@ func NewResponseMap() *ResponseMap {
 	return &r
 }
 
-func (r *ResponseMap) PushResponse(messageId string, returnAdress string, returnPort string) {
+func (r *responseMap) PushResponse(messageId string, returnAdress string, returnPort string) {
 	r.lock.lock()
 	defer r.lock.unlock()
 
@@ -31,7 +31,7 @@ func (r *ResponseMap) PushResponse(messageId string, returnAdress string, return
 	}
 }
 
-func (r *ResponseMap) PopResponse(messageId string) (*ResponseInfo, error) {
+func (r *responseMap) PopResponse(messageId string) (*ResponseInfo, error) {
 	r.lock.lock()
 	defer r.lock.unlock()
 

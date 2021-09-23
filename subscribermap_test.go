@@ -1,9 +1,11 @@
-package registrar
+package courier
 
 import (
 	"fmt"
 	"math/rand"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestSubscriberMap_AddSubscriber(t *testing.T) {
@@ -78,8 +80,8 @@ func TestSubscriberMap_SubjectSubscribers(t *testing.T) {
 	subjects := []string{"sub", "sub1"}
 	nodes := createTestNodes(length, subjects...)
 	subMap := NewSubscriberMap()
-	subnodes := []*Node{}
-	sub1nodes := []*Node{}
+	subnodes := []*node{}
+	sub1nodes := []*node{}
 
 	for _, node := range nodes {
 		subMap.AddSubscriber(node)
@@ -185,8 +187,8 @@ func TestFindSubscriber(t *testing.T) {
 	//should check to make sure that we're getting the correct amount of nodes in each subject
 }
 
-func createTestNodes(count int, subjects ...string) []*Node {
-	nodes := []*Node{}
+func createTestNodes(count int, subjects ...string) []*node {
+	nodes := []*node{}
 	broadSubjects := []string{"broad", "broad1"}
 	var subSubjects []string
 
@@ -212,7 +214,7 @@ func createTestNodes(count int, subjects ...string) []*Node {
 			broads = append(broads, broadSubjects[i])
 		}
 
-		n := NewNode(ip, port, subs, broads)
+		n := NewNode(uuid.NewString(), ip, port, subs, broads)
 		nodes = append(nodes, n)
 	}
 

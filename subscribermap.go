@@ -1,17 +1,17 @@
-package registrar
+package courier
 
 import (
 	"fmt"
 )
 
-type SubscriberMap struct {
-	subscribers map[string][]*Node
-	lock        *TicketLock
+type subscriberMap struct {
+	subscribers map[string][]*node
+	lock        *ticketLock
 }
 
-func NewSubscriberMap() *SubscriberMap {
-	s := SubscriberMap{
-		subscribers: make(map[string][]*Node),
+func NewSubscriberMap() *subscriberMap {
+	s := subscriberMap{
+		subscribers: make(map[string][]*node),
 		lock:        newTicketLock(),
 	}
 
@@ -20,7 +20,7 @@ func NewSubscriberMap() *SubscriberMap {
 
 // Goes through a node's subscribed subjects and updates the subscriber map if
 // they aren't present under one of their subscribed subjects.
-func (s *SubscriberMap) AddSubscriber(subscriber *Node) {
+func (s *subscriberMap) AddSubscriber(subscriber *node) {
 	s.lock.lock()
 	defer s.lock.unlock()
 
@@ -34,7 +34,7 @@ func (s *SubscriberMap) AddSubscriber(subscriber *Node) {
 }
 
 // Removes a subscriber from all of the subjects it subscribed to.
-func (s *SubscriberMap) RemoveSubscriber(subscriber *Node) error {
+func (s *subscriberMap) RemoveSubscriber(subscriber *node) error {
 	s.lock.lock()
 	defer s.lock.unlock()
 
@@ -59,7 +59,7 @@ func (s *SubscriberMap) RemoveSubscriber(subscriber *Node) error {
 }
 
 // Takes a subject and returns all of nodes subscribed to that subject.
-func (s *SubscriberMap) SubjectSubscribers(subject string) ([]*Node, error) {
+func (s *subscriberMap) SubjectSubscribers(subject string) ([]*node, error) {
 	s.lock.lock()
 	defer s.lock.unlock()
 
@@ -72,11 +72,11 @@ func (s *SubscriberMap) SubjectSubscribers(subject string) ([]*Node, error) {
 }
 
 // Returns a unique list containing all of this nodes Subscribers.
-func (s *SubscriberMap) AllSubscribers() []*Node {
+func (s *subscriberMap) AllSubscribers() []*node {
 	s.lock.lock()
 	defer s.lock.unlock()
 
-	uniquesubs := []*Node{}
+	uniquesubs := []*node{}
 	subMap := make(map[string]bool)
 	for _, subscribers := range s.subscribers {
 		for _, subscriber := range subscribers {
@@ -93,7 +93,7 @@ func (s *SubscriberMap) AllSubscribers() []*Node {
 
 // checks if subscriber is listed under a subject.  If it exists, this returns the postion.
 // If it doesn't, false is returned.
-func findSubscriber(subscribers []*Node, id string) (int, bool) {
+func findSubscriber(subscribers []*node, id string) (int, bool) {
 	for i, subscriber := range subscribers {
 		if subscriber.Id == id {
 			return i, true
@@ -104,7 +104,7 @@ func findSubscriber(subscribers []*Node, id string) (int, bool) {
 }
 
 // Removes the node at the given position from the given node list.
-func removeSubscriberFromSubject(nodes []*Node, position int) ([]*Node, error) {
+func removeSubscriberFromSubject(nodes []*node, position int) ([]*node, error) {
 	if position < 0 || position > len(nodes) {
 		return nil, fmt.Errorf("expected position to fall within range of %v but got %v", len(nodes), position)
 	}

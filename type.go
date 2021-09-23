@@ -1,16 +1,16 @@
-package message
+package courier
 
 // the types of message that can be created
 // assigned based on what kind interaction the sender of the message wants with receiver
-type MessageType int
+type messageType int
 
 const (
-	PubMessage MessageType = iota
+	PubMessage messageType = iota
 	ReqMessage
 	RespMessage
 )
 
-func (m MessageType) String() string {
+func (m messageType) String() string {
 	types := []string{
 		"PubMessage",
 		"RespMessage",

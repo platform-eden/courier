@@ -1,19 +1,18 @@
-package queue
+package courier
 
 import (
 	"log"
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/platform-eden/courier/internal/message"
 )
 
 func TestNewQueuePusher(t *testing.T) {
 	pq := newPriorityQueue()
 
-	m1 := PQMessage{
-		Message:  message.NewPubMessage("test", []byte("test")),
-		Priority: int(message.PubMessage),
+	m1 := pqMessage{
+		Message:  NewPubMessage("test", []byte("test")),
+		Priority: int(PubMessage),
 	}
 
 	// increase size of queue
@@ -21,7 +20,7 @@ func TestNewQueuePusher(t *testing.T) {
 
 	mp, err := newQueuePusher(pq)
 	if err == nil {
-		t.Fatalf("QueuePusher creation should fail when length is greater than 0.  length was: %v", mp.messageQueue.Len())
+		t.Fatalf("queuePusher creation should fail when length is greater than 0.  length was: %v", mp.messageQueue.Len())
 	}
 
 	//return size to zero
@@ -37,16 +36,16 @@ func TestQueuePusher_Listen(t *testing.T) {
 
 	mp, err := newQueuePusher(pq)
 	if err != nil {
-		log.Fatalf("error creating QueuePusher: %v", err)
+		log.Fatalf("error creating queuePusher: %v", err)
 	}
 
 	mp.start()
 
-	m1 := message.NewPubMessage("test", []byte("test"))
-	m2 := message.NewReqMessage("test", []byte("test"))
-	m3 := message.NewRespMessage(uuid.NewString(), "test", []byte("test"))
+	m1 := NewPubMessage("test", []byte("test"))
+	m2 := NewReqMessage("test", []byte("test"))
+	m3 := NewRespMessage(uuid.NewString(), "test", []byte("test"))
 
-	messageList := []message.Message{m1, m2, m3}
+	messageList := []Message{m1, m2, m3}
 
 	mchan := mp.pushChannel()
 
