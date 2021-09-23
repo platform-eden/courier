@@ -1,6 +1,6 @@
 package courier
 
-type node struct {
+type Node struct {
 	Id                  string
 	IpAddress           string
 	Port                string
@@ -8,8 +8,8 @@ type node struct {
 	BroadcastedSubjects []string
 }
 
-func NewNode(id string, ip string, port string, subscribed []string, broadcasted []string) *node {
-	n := node{
+func NewNode(id string, ip string, port string, subscribed []string, broadcasted []string) *Node {
+	n := Node{
 		Id:                  id,
 		IpAddress:           ip,
 		Port:                port,

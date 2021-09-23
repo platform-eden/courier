@@ -80,8 +80,8 @@ func TestSubscriberMap_SubjectSubscribers(t *testing.T) {
 	subjects := []string{"sub", "sub1"}
 	nodes := createTestNodes(length, subjects...)
 	subMap := NewSubscriberMap()
-	subnodes := []*node{}
-	sub1nodes := []*node{}
+	subnodes := []*Node{}
+	sub1nodes := []*Node{}
 
 	for _, node := range nodes {
 		subMap.AddSubscriber(node)
@@ -187,8 +187,8 @@ func TestFindSubscriber(t *testing.T) {
 	//should check to make sure that we're getting the correct amount of nodes in each subject
 }
 
-func createTestNodes(count int, subjects ...string) []*node {
-	nodes := []*node{}
+func createTestNodes(count int, subjects ...string) []*Node {
+	nodes := []*Node{}
 	broadSubjects := []string{"broad", "broad1"}
 	var subSubjects []string
 
