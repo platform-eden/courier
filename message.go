@@ -1,4 +1,4 @@
-package message
+package courier
 
 import (
 	"github.com/google/uuid"
@@ -9,7 +9,7 @@ import (
 // subject describes the content of the message
 type Message struct {
 	Id      string
-	Type    MessageType
+	Type    messageType
 	Subject string
 	Content []byte
 }

@@ -1,25 +1,23 @@
-package queue
+package courier
 
 import (
 	"fmt"
-
-	"github.com/platform-eden/courier/internal/message"
 )
 
-type Handler interface {
-	PushChannel() chan message.Message
-	Subscribe(string) chan message.Message
+type handler interface {
+	PushChannel() chan Message
+	Subscribe(string) chan Message
 }
 
-type QueueHandler struct {
-	pusher Pusher
-	popper Popper
-	queue  PriorityQueuer
+type queueHandler struct {
+	pusher pusher
+	popper popper
+	queue  priorityQueuer
 }
 
-// Returns a QueueHandler with a priority queue.  makes a channel avaialble for pushing to the queue and subscribing to subjects
+// Returns a queueHandler with a priority queue.  makes a channel avaialble for pushing to the queue and subscribing to subjects
 // popped from the queue.
-func NewQueueHandler() (*QueueHandler, error) {
+func NewQueueHandler() (*queueHandler, error) {
 	pq := newPriorityQueue()
 
 	pusher, err := newQueuePusher(pq)
@@ -32,7 +30,7 @@ func NewQueueHandler() (*QueueHandler, error) {
 		return nil, fmt.Errorf("could not create popper: %s", err)
 	}
 
-	qh := QueueHandler{
+	qh := queueHandler{
 		pusher: pusher,
 		popper: popper,
 		queue:  pq,
@@ -45,12 +43,12 @@ func NewQueueHandler() (*QueueHandler, error) {
 }
 
 // returns the channel that the queue handler's pusher receives messages on
-func (qh *QueueHandler) PushChannel() chan message.Message {
+func (qh *queueHandler) PushChannel() chan Message {
 	return qh.pusher.pushChannel()
 }
 
 // takes a subject and returns a channel that will receive messages assigned that subject
-func (qh *QueueHandler) Subscribe(subject string) chan message.Message {
+func (qh *queueHandler) Subscribe(subject string) chan Message {
 	mchan := qh.popper.subscribe(subject)
 	return mchan
 }

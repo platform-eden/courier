@@ -1,27 +1,27 @@
-package queue
+package courier
 
 import (
 	"container/heap"
 )
 
-type PriorityQueuer interface {
+type priorityQueuer interface {
 	Len() int
 	safeLen() int
-	safePop() (*PQMessage, bool)
-	safePush(*PQMessage)
+	safePop() (*pqMessage, bool)
+	safePush(*pqMessage)
 	empty()
 }
 
 // a priority queue that holds messages
-type PriorityQueue struct {
-	Queue []*PQMessage
+type priorityQueue struct {
+	Queue []*pqMessage
 	lock  Locker
 }
 
-//creates a new PriorityQueue
-func newPriorityQueue() *PriorityQueue {
-	pq := PriorityQueue{
-		Queue: make([]*PQMessage, 0),
+//creates a new priorityQueue
+func newPriorityQueue() *priorityQueue {
+	pq := priorityQueue{
+		Queue: make([]*pqMessage, 0),
 		lock:  newTicketLock(),
 	}
 
@@ -30,31 +30,31 @@ func newPriorityQueue() *PriorityQueue {
 }
 
 // gets length of the queue
-func (pq *PriorityQueue) Len() int { return len(pq.Queue) }
+func (pq *priorityQueue) Len() int { return len(pq.Queue) }
 
 // needed to implemented heap interface and is used for comparing nodes in queue
-func (pq *PriorityQueue) Less(i, j int) bool {
+func (pq *priorityQueue) Less(i, j int) bool {
 	// We want Pop to give us the highest, not lowest, priority so we use greater than here.
 	return pq.Queue[i].Priority > pq.Queue[j].Priority
 }
 
 // needed to implemented heap interface and is used for swapping nodes in queue
-func (pq *PriorityQueue) Swap(i, j int) {
+func (pq *priorityQueue) Swap(i, j int) {
 	pq.Queue[i], pq.Queue[j] = pq.Queue[j], pq.Queue[i]
 	pq.Queue[i].Index = i
 	pq.Queue[j].Index = j
 }
 
 // adds a node into the queue
-func (pq *PriorityQueue) Push(message interface{}) {
+func (pq *priorityQueue) Push(m interface{}) {
 	n := pq.Len()
-	pqMessage := message.(*PQMessage)
+	pqMessage := m.(*pqMessage)
 	pqMessage.Index = n
 	pq.Queue = append(pq.Queue, pqMessage)
 }
 
 // pops node from queue
-func (pq *PriorityQueue) Pop() interface{} {
+func (pq *priorityQueue) Pop() interface{} {
 	old := pq.Queue
 	n := pq.Len()
 	pqMessage := old[n-1]
@@ -71,7 +71,7 @@ func (p *PQIndexOutOfRangeError) Error() string {
 }
 
 // atomic push
-func (pq *PriorityQueue) safePush(message *PQMessage) {
+func (pq *priorityQueue) safePush(message *pqMessage) {
 	pq.lock.lock()
 	defer pq.lock.unlock()
 
@@ -79,7 +79,7 @@ func (pq *PriorityQueue) safePush(message *PQMessage) {
 }
 
 // atomic check of queue length and pop
-func (pq *PriorityQueue) safePop() (*PQMessage, bool) {
+func (pq *priorityQueue) safePop() (*pqMessage, bool) {
 	pq.lock.lock()
 	defer pq.lock.unlock()
 
@@ -87,12 +87,12 @@ func (pq *PriorityQueue) safePop() (*PQMessage, bool) {
 		return nil, false
 	}
 
-	message := heap.Pop(pq).(*PQMessage)
+	message := heap.Pop(pq).(*pqMessage)
 
 	return message, true
 }
 
-func (pq *PriorityQueue) safeLen() int {
+func (pq *priorityQueue) safeLen() int {
 	pq.lock.lock()
 	defer pq.lock.unlock()
 
@@ -100,8 +100,8 @@ func (pq *PriorityQueue) safeLen() int {
 }
 
 // empties the queue
-func (pq *PriorityQueue) empty() {
+func (pq *priorityQueue) empty() {
 	pq.lock.lock()
 	defer pq.lock.unlock()
-	pq.Queue = []*PQMessage{}
+	pq.Queue = []*pqMessage{}
 }
