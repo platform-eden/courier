@@ -87,3 +87,24 @@ func TestPriorityQueue_SafePop(t *testing.T) {
 		t.Fatalf("expected type %v but got %v", RespMessage, m.Message.Type)
 	}
 }
+
+func TestPriorityQueue_Empty(t *testing.T) {
+	m := &pqMessage{
+		Message: Message{
+			Id:      uuid.NewString(),
+			Type:    PubMessage,
+			Subject: "test",
+			Content: []byte("test"),
+		},
+	}
+
+	pq := newPriorityQueue()
+
+	pq.safePush(m)
+
+	pq.empty()
+
+	if len(pq.Queue) != 0 {
+		t.Fatalf("expected queue length to be 0 bit got %v", len(pq.Queue))
+	}
+}
