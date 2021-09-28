@@ -1,4 +1,5 @@
-//+build mage
+//go:build mage
+// +build mage
 
 package main
 
@@ -39,12 +40,12 @@ func Proto() error {
 	for _, file := range files {
 		if strings.HasSuffix(file.Name(), ".proto") {
 
-			err = sh.Run("protoc", "--proto_path="+protoPath, "--go-grpc_out=.", file.Name())
+			err = sh.Run("protoc", "--proto_path="+protoPath, "--go-grpc_out=paths=source_relative:.", file.Name())
 			if err != nil {
 				return fmt.Errorf("could not create go proto files: %s", err)
 			}
 
-			err = sh.Run("protoc", "--proto_path="+protoPath, "--go_out=.", file.Name())
+			err = sh.Run("protoc", "--proto_path="+protoPath, "--go_out=paths=source_relative:.", file.Name())
 			if err != nil {
 				return fmt.Errorf("could not create go proto files: %s", err)
 			}
@@ -56,25 +57,19 @@ func Proto() error {
 
 // runs unit tests
 func UnitTest() error {
-	internalDir := filepath.Join(baseDir, "internal")
+	os.Chdir(baseDir)
 
-	os.Chdir(internalDir)
-
-	err := sh.Run("go", "test", "-race", "-covermode=atomic", "-coverprofile=coverage.out", "./...")
+	err := sh.Run("go", "test", "-race", "-covermode=atomic", "-coverprofile=coverage.out", ".")
 	if err != nil {
 		return fmt.Errorf("failed unit test: %s", err)
 	}
-
-	os.Rename(filepath.Join(internalDir, "coverage.out"), filepath.Join(baseDir, "coverage.out"))
 
 	return nil
 }
 
 // formats go code
 func Fmt() error {
-	internalDir := filepath.Join(baseDir, "internal")
-
-	os.Chdir(internalDir)
+	os.Chdir(baseDir)
 
 	err := sh.Run("go", "fmt", "./...")
 	if err != nil {
