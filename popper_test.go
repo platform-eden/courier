@@ -1,25 +1,23 @@
-package queue
+package courier
 
 import (
 	"testing"
 	"time"
-
-	"github.com/platform-eden/courier/internal/message"
 )
 
 func TestNewQueuePopper(t *testing.T) {
 	pq := newPriorityQueue()
 
-	m1 := PQMessage{
-		Message:  message.NewPubMessage("test", []byte("test")),
-		Priority: int(message.PubMessage),
+	m1 := pqMessage{
+		Message:  NewPubMessage("test", []byte("test")),
+		Priority: int(PubMessage),
 	}
 
 	//increase queue size
 	pq.safePush(&m1)
 	mp, err := newQueuePopper(pq)
 	if err == nil {
-		t.Fatalf("QueuePopper creation should fail when length is greater than 0.  length was: %v", mp.messageQueue.Len())
+		t.Fatalf("queuePopper creation should fail when length is greater than 0.  length was: %v", mp.messageQueue.Len())
 	}
 
 	//return queue size to 0
@@ -43,9 +41,9 @@ func TestQueuePopper_Subscribe(t *testing.T) {
 	mp.start()
 
 	go func() {
-		m1 := PQMessage{
-			Message:  message.NewPubMessage("test", []byte("test")),
-			Priority: int(message.PubMessage),
+		m1 := pqMessage{
+			Message:  NewPubMessage("test", []byte("test")),
+			Priority: int(PubMessage),
 		}
 
 		pq.safePush(&m1)
@@ -69,7 +67,7 @@ func TestQueuePopper_Send(t *testing.T) {
 		t.Fatalf("could not create message popper: %s", err)
 	}
 
-	m1 := message.NewPubMessage("test", []byte("test"))
+	m1 := NewPubMessage("test", []byte("test"))
 
 	err = mp.send(m1)
 	if err == nil {

@@ -1,4 +1,4 @@
-package message
+package courier
 
 import "testing"
 
@@ -9,7 +9,7 @@ func TestMessageType_String(t *testing.T) {
 		"ReqMessage",
 	}
 
-	types := []MessageType{PubMessage, ReqMessage, RespMessage}
+	types := []messageType{PubMessage, ReqMessage, RespMessage}
 
 	for i, m := range types {
 		if m.String() != ts[i] {

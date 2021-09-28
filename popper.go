@@ -1,48 +1,46 @@
-package queue
+package courier
 
 import (
 	"fmt"
+	"log"
 	"time"
-
-	"github.com/platform-eden/courier/internal/message"
-	"go.uber.org/zap"
 )
 
-type Popper interface {
+type popper interface {
 	start()
-	subscribe(string) chan message.Message
-	send(message.Message) error
+	subscribe(string) chan Message
+	send(Message) error
 }
 
 // retrieves messages from a PriorityQuerer and sends them to subscribers
 // subscribers request channels based on a subject name that they will then receive messages through
 // subscriptions are a list of channels subscribers have requested based upon a subject
-type QueuePopper struct {
-	messageQueue  PriorityQueuer
-	Subscriptions map[string][]chan (message.Message)
+type queuePopper struct {
+	messageQueue  priorityQueuer
+	Subscriptions map[string][]chan (Message)
 }
 
-// creates a new QueuePopper
-func newQueuePopper(pq PriorityQueuer) (*QueuePopper, error) {
+// creates a new queuePopper
+func newQueuePopper(pq priorityQueuer) (*queuePopper, error) {
 	pqLength := pq.Len()
 
 	if pqLength != 0 {
 		return nil, fmt.Errorf("expected PriorityQuerer's queue length to be zero but got %v", pqLength)
 	}
 
-	mp := QueuePopper{
+	mp := queuePopper{
 		messageQueue:  pq,
-		Subscriptions: map[string][]chan (message.Message){},
+		Subscriptions: map[string][]chan (Message){},
 	}
 
 	return &mp, nil
 }
 
 // adds a channel to a list of channels underneath a subject name and returns the channel to the requester
-func (mp *QueuePopper) subscribe(subject string) chan message.Message {
+func (mp *queuePopper) subscribe(subject string) chan Message {
 	subscription := mp.Subscriptions[subject]
 
-	subscriber := make(chan message.Message)
+	subscriber := make(chan Message)
 
 	subscription = append(subscription, subscriber)
 
@@ -54,16 +52,16 @@ func (mp *QueuePopper) subscribe(subject string) chan message.Message {
 	return subscriber
 }
 
-// signals the QueuePopper to start reading from the PriorityQueuer and send messages to subscribers
-func (mp *QueuePopper) start() {
+// signals the queuePopper to start reading from the priorityQueuer and send messages to subscribers
+func (mp *queuePopper) start() {
 	fmt.Printf("%v popper started\n", time.Now().Format(time.RFC3339))
 	go func() {
 		for {
-			message, popped := mp.messageQueue.safePop()
+			m, popped := mp.messageQueue.safePop()
 			if popped {
-				err := mp.send(message.Message)
+				err := mp.send(m.Message)
 				if err != nil {
-					zap.S().Errorf("sendings message to subscribes failed: %s", err)
+					log.Printf("sending message to subscribes failed: %s\n", err)
 				}
 			}
 		}
@@ -77,7 +75,7 @@ func (m *EmptySubscriptionError) Error() string {
 }
 
 // gets a messages subject and then sends the message through all of the channels subscribed
-func (mp *QueuePopper) send(m message.Message) error {
+func (mp *queuePopper) send(m Message) error {
 	subscription := mp.Subscriptions[m.Subject]
 
 	if len(subscription) == 0 {
@@ -85,7 +83,7 @@ func (mp *QueuePopper) send(m message.Message) error {
 	}
 
 	for _, subscriber := range subscription {
-		go func(subscriber chan message.Message) {
+		go func(subscriber chan Message) {
 			subscriber <- m
 		}(subscriber)
 	}
