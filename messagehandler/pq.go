@@ -1,7 +1,9 @@
-package courier
+package messagehandler
 
 import (
 	"container/heap"
+
+	"github.com/platform-edn/courier/lock"
 )
 
 type priorityQueuer interface {
@@ -15,14 +17,14 @@ type priorityQueuer interface {
 // a priority queue that holds messages
 type priorityQueue struct {
 	Queue []*pqMessage
-	lock  Locker
+	lock  lock.Locker
 }
 
 //creates a new priorityQueue
 func newPriorityQueue() *priorityQueue {
 	pq := priorityQueue{
 		Queue: make([]*pqMessage, 0),
-		lock:  newTicketLock(),
+		lock:  lock.NewTicketLock(),
 	}
 
 	heap.Init(&pq)
@@ -72,16 +74,16 @@ func (p *PQIndexOutOfRangeError) Error() string {
 
 // atomic push
 func (pq *priorityQueue) safePush(message *pqMessage) {
-	pq.lock.lock()
-	defer pq.lock.unlock()
+	pq.lock.Lock()
+	defer pq.lock.Unlock()
 
 	heap.Push(pq, message)
 }
 
 // atomic check of queue length and pop
 func (pq *priorityQueue) safePop() (*pqMessage, bool) {
-	pq.lock.lock()
-	defer pq.lock.unlock()
+	pq.lock.Lock()
+	defer pq.lock.Unlock()
 
 	if pq.Len() == 0 {
 		return nil, false
@@ -93,15 +95,15 @@ func (pq *priorityQueue) safePop() (*pqMessage, bool) {
 }
 
 func (pq *priorityQueue) safeLen() int {
-	pq.lock.lock()
-	defer pq.lock.unlock()
+	pq.lock.Lock()
+	defer pq.lock.Unlock()
 
 	return len(pq.Queue)
 }
 
 // empties the queue
 func (pq *priorityQueue) empty() {
-	pq.lock.lock()
-	defer pq.lock.unlock()
+	pq.lock.Lock()
+	defer pq.lock.Unlock()
 	pq.Queue = []*pqMessage{}
 }

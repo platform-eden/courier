@@ -1,23 +1,26 @@
-package courier
+package observer
 
 import (
 	"testing"
 	"time"
+
+	"github.com/platform-edn/courier/node"
+	test "github.com/platform-edn/courier/testing"
 )
 
 func TestStoreObserver_Start(t *testing.T) {
 	nodecount := 10
 	subjects := []string{"sub1", "sub2", "sub3"}
-	nodes := createTestNodes(nodecount, &testNodeOptions{
+	nodes := test.CreateTestNodes(nodecount, &test.TestNodeOptions{
 		SubscribedSubjects:  subjects,
 		BroadcastedSubjects: []string{"broad1", "broad2", "broad3"},
 	})
-	store := NewMockNodeStore(nodes...)
+	store := test.NewMockNodeStore(nodes...)
 	observer := NewStoreObserver(store, (time.Second * 1), subjects)
 
-	nodeChannel := observer.listenChannel()
+	nodeChannel := observer.ListenChannel()
 
-	observer.start()
+	observer.Start()
 
 	timer := time.NewTimer(time.Second * 3)
 
@@ -28,7 +31,7 @@ func TestStoreObserver_Start(t *testing.T) {
 		timer.Stop()
 	}
 
-	newNode := createTestNodes(1, &testNodeOptions{
+	newNode := test.CreateTestNodes(1, &test.TestNodeOptions{
 		SubscribedSubjects:  subjects,
 		BroadcastedSubjects: []string{"broad1", "broad2", "broad3"},
 	})[0]
@@ -47,19 +50,19 @@ func TestStoreObserver_Start(t *testing.T) {
 func TestCompareNodes(t *testing.T) {
 	nodecount := 10
 	subjects := []string{"sub1", "sub2", "sub3"}
-	nodes := createTestNodes(nodecount, &testNodeOptions{
+	nodes := test.CreateTestNodes(nodecount, &test.TestNodeOptions{
 		SubscribedSubjects:  subjects,
 		BroadcastedSubjects: []string{"broad1", "broad2", "broad3"},
 	})
 
-	nodeMap := map[string]*Node{}
+	nodeMap := map[string]*node.Node{}
 
-	for _, node := range nodes {
-		nodeMap[node.Id] = node
+	for _, n := range nodes {
+		nodeMap[n.Id] = n
 	}
 
 	removedNode := nodes[0]
-	addedNode := createTestNodes(1, &testNodeOptions{
+	addedNode := test.CreateTestNodes(1, &test.TestNodeOptions{
 		SubscribedSubjects:  subjects,
 		BroadcastedSubjects: []string{"broad1", "broad2", "broad3"},
 	})[0]
@@ -70,8 +73,8 @@ func TestCompareNodes(t *testing.T) {
 		t.Fatalf("should have returned updated as true but got false")
 	}
 
-	for _, node := range current {
-		if node.Id == removedNode.Id {
+	for _, n := range current {
+		if n.Id == removedNode.Id {
 			t.Fatalf("expected node %s to be removed but it wasn't", removedNode.Id)
 
 		}

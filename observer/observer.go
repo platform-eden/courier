@@ -1,25 +1,27 @@
-package courier
+package observer
 
 import (
 	"log"
 	"time"
+
+	"github.com/platform-edn/courier/node"
 )
 
-type storeObserver struct {
+type StoreObserver struct {
 	store           NodeStorer
 	observeInterval time.Duration
-	currentNodes    map[string]*Node
-	nodeChannels    []chan (map[string]*Node)
+	currentNodes    map[string]*node.Node
+	nodeChannels    []chan (map[string]*node.Node)
 	subjects        []string
 }
 
 // Returns a paused StoreObserver
-func NewStoreObserver(store NodeStorer, interval time.Duration, subjects []string) *storeObserver {
-	s := storeObserver{
+func NewStoreObserver(store NodeStorer, interval time.Duration, subjects []string) *StoreObserver {
+	s := StoreObserver{
 		store:           store,
 		observeInterval: interval,
-		currentNodes:    map[string]*Node{},
-		nodeChannels:    []chan (map[string]*Node){},
+		currentNodes:    map[string]*node.Node{},
+		nodeChannels:    []chan (map[string]*node.Node){},
 		subjects:        subjects,
 	}
 
@@ -27,8 +29,8 @@ func NewStoreObserver(store NodeStorer, interval time.Duration, subjects []strin
 }
 
 // Adds a channel to the StoreObserver that will receive a map of Nodes when the NodeStore has updated Nodes and returns it
-func (s *storeObserver) listenChannel() chan (map[string]*Node) {
-	channel := make(chan map[string]*Node)
+func (s *StoreObserver) ListenChannel() chan (map[string]*node.Node) {
+	channel := make(chan map[string]*node.Node)
 	s.nodeChannels = append(s.nodeChannels, channel)
 
 	return channel
@@ -36,7 +38,7 @@ func (s *storeObserver) listenChannel() chan (map[string]*Node) {
 
 // Starts a Goroutine that will begin comparing current nodes and what nodes the NodeStore has.  If the NodeStore updates,
 // it sends a new map of Nodes to each Node Channel listening to the Observer.
-func (s *storeObserver) start() {
+func (s *StoreObserver) Start() {
 	go func() {
 		for {
 			timer := time.NewTimer(s.observeInterval)
@@ -63,9 +65,9 @@ func (s *storeObserver) start() {
 
 // compares the Nodes returned from the NodeStore with the current Nodes in the service.
 // If there are differences, this will return true with an updated map of Nodes.
-func compareNodes(potential []*Node, expired map[string]*Node) (map[string]*Node, bool) {
-	current := map[string]*Node{}
-	new := map[string]*Node{}
+func compareNodes(potential []*node.Node, expired map[string]*node.Node) (map[string]*node.Node, bool) {
+	current := map[string]*node.Node{}
+	new := map[string]*node.Node{}
 	updated := false
 
 	for _, node := range potential {

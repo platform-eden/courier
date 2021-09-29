@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/magefile/mage/sh"
@@ -28,24 +27,22 @@ func getMageDir() string {
 
 // updates grpc boilerplate
 func Proto() error {
-	protoPath := filepath.Join(baseDir, "proto")
-
 	// get files in proto path
-	files, err := ioutil.ReadDir(protoPath)
+	files, err := ioutil.ReadDir(baseDir)
 	if err != nil {
-		return fmt.Errorf("could not get files in %s: %s", protoPath, err)
+		return fmt.Errorf("could not get files in %s: %s", baseDir, err)
 	}
 
 	// get the generated protobuf files for each proto file for go
 	for _, file := range files {
 		if strings.HasSuffix(file.Name(), ".proto") {
 
-			err = sh.Run("protoc", "--proto_path="+protoPath, "--go-grpc_out=paths=source_relative:.", file.Name())
+			err = sh.Run("protoc", "--proto_path="+baseDir, "--go-grpc_out=.", file.Name())
 			if err != nil {
 				return fmt.Errorf("could not create go proto files: %s", err)
 			}
 
-			err = sh.Run("protoc", "--proto_path="+protoPath, "--go_out=paths=source_relative:.", file.Name())
+			err = sh.Run("protoc", "--proto_path="+baseDir, "--go_out=.", file.Name())
 			if err != nil {
 				return fmt.Errorf("could not create go proto files: %s", err)
 			}
@@ -59,7 +56,7 @@ func Proto() error {
 func UnitTest() error {
 	os.Chdir(baseDir)
 
-	err := sh.Run("go", "test", "-race", "-covermode=atomic", "-coverprofile=coverage.out", ".")
+	err := sh.Run("go", "test", "-race", "-covermode=atomic", "-coverprofile=coverage.out", "./...")
 	if err != nil {
 		return fmt.Errorf("failed unit test: %s", err)
 	}

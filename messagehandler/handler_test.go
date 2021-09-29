@@ -1,8 +1,10 @@
-package courier
+package messagehandler
 
 import (
 	"testing"
 	"time"
+
+	"github.com/platform-edn/courier/message"
 )
 
 func TestNewQueueHandler(t *testing.T) {
@@ -22,7 +24,7 @@ func TestQueueHandler_SubscribeAndPush(t *testing.T) {
 	pop := qh.Subscribe("test")
 	push := qh.PushChannel()
 
-	m := NewPubMessage("test", []byte("test"))
+	m := message.NewPubMessage("test", []byte("test"))
 
 	push <- m
 

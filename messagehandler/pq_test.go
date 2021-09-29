@@ -1,9 +1,10 @@
-package courier
+package messagehandler
 
 import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/platform-edn/courier/message"
 )
 
 func TestNewPriorityQueue(t *testing.T) {
@@ -16,9 +17,9 @@ func TestNewPriorityQueue(t *testing.T) {
 
 func TestPriorityQueue_SafePush(t *testing.T) {
 	m := &pqMessage{
-		Message: Message{
+		Message: message.Message{
 			Id:      uuid.NewString(),
-			Type:    PubMessage,
+			Type:    message.PubMessage,
 			Subject: "test",
 			Content: []byte("test"),
 		},
@@ -43,33 +44,33 @@ func TestPriorityQueue_SafePop(t *testing.T) {
 	}
 
 	m1 := &pqMessage{
-		Message: Message{
+		Message: message.Message{
 			Id:      uuid.NewString(),
-			Type:    PubMessage,
+			Type:    message.PubMessage,
 			Subject: "test",
 			Content: []byte("test"),
 		},
-		Priority: int(PubMessage),
+		Priority: int(message.PubMessage),
 	}
 
 	m2 := &pqMessage{
-		Message: Message{
+		Message: message.Message{
 			Id:      uuid.NewString(),
-			Type:    ReqMessage,
+			Type:    message.ReqMessage,
 			Subject: "test",
 			Content: []byte("test"),
 		},
-		Priority: int(ReqMessage),
+		Priority: int(message.ReqMessage),
 	}
 
 	m3 := &pqMessage{
-		Message: Message{
+		Message: message.Message{
 			Id:      uuid.NewString(),
-			Type:    RespMessage,
+			Type:    message.RespMessage,
 			Subject: "test",
 			Content: []byte("test"),
 		},
-		Priority: int(RespMessage),
+		Priority: int(message.RespMessage),
 	}
 
 	messageList := []*pqMessage{m2, m3, m1, m2}
@@ -83,16 +84,16 @@ func TestPriorityQueue_SafePop(t *testing.T) {
 		t.Fatal("expected popped to be true but got false")
 	}
 
-	if m.Message.Type != RespMessage {
-		t.Fatalf("expected type %v but got %v", RespMessage, m.Message.Type)
+	if m.Message.Type != message.RespMessage {
+		t.Fatalf("expected type %v but got %v", message.RespMessage, m.Message.Type)
 	}
 }
 
 func TestPriorityQueue_Empty(t *testing.T) {
 	m := &pqMessage{
-		Message: Message{
+		Message: message.Message{
 			Id:      uuid.NewString(),
-			Type:    PubMessage,
+			Type:    message.PubMessage,
 			Subject: "test",
 			Content: []byte("test"),
 		},

@@ -1,9 +1,9 @@
-package courier
+package lock
 
 import "testing"
 
 func TestNewTicketLock(t *testing.T) {
-	tl := newTicketLock()
+	tl := NewTicketLock()
 
 	if tl.ticket != 0 || tl.next != 0 {
 		t.Fatal("ticket and next need to equal zero when instantiated")
@@ -11,12 +11,12 @@ func TestNewTicketLock(t *testing.T) {
 }
 
 func TestTicketLock_Lock(t *testing.T) {
-	tl := newTicketLock()
-	defer tl.unlock()
+	tl := NewTicketLock()
+	defer tl.Unlock()
 
 	startTicket := tl.ticket
 	startNext := tl.next
-	tl.lock()
+	tl.Lock()
 	lockTicket := tl.ticket
 	lockNext := tl.next
 
@@ -30,13 +30,13 @@ func TestTicketLock_Lock(t *testing.T) {
 }
 
 func TestTicketLock_Unlock(t *testing.T) {
-	tl := newTicketLock()
+	tl := NewTicketLock()
 
-	tl.lock()
+	tl.Lock()
 	lockTicket := tl.ticket
 	lockNext := tl.next
 
-	tl.unlock()
+	tl.Unlock()
 	unlockTicket := tl.ticket
 	unlockNext := tl.next
 

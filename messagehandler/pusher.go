@@ -1,13 +1,15 @@
-package courier
+package messagehandler
 
 import (
 	"fmt"
 	"time"
+
+	"github.com/platform-edn/courier/message"
 )
 
 type pusher interface {
 	start()
-	pushChannel() chan Message
+	pushChannel() chan message.Message
 }
 
 // handles incoming Messages for a priority queue
@@ -15,7 +17,7 @@ type pusher interface {
 // it makes available for other processes
 type queuePusher struct {
 	messageQueue    priorityQueuer
-	messsageChannel chan (Message)
+	messsageChannel chan (message.Message)
 	StopChannel     chan (int)
 }
 
@@ -30,7 +32,7 @@ func newQueuePusher(pq priorityQueuer) (*queuePusher, error) {
 
 	mp := queuePusher{
 		messageQueue:    pq,
-		messsageChannel: make(chan Message),
+		messsageChannel: make(chan message.Message),
 	}
 
 	return &mp, nil
@@ -51,6 +53,6 @@ func (qp *queuePusher) start() {
 }
 
 // returns the channel that the pusher receives messages on
-func (qp *queuePusher) pushChannel() chan Message {
+func (qp *queuePusher) pushChannel() chan message.Message {
 	return qp.messsageChannel
 }

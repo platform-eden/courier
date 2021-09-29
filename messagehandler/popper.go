@@ -1,15 +1,17 @@
-package courier
+package messagehandler
 
 import (
 	"fmt"
 	"log"
 	"time"
+
+	"github.com/platform-edn/courier/message"
 )
 
 type popper interface {
 	start()
-	subscribe(string) chan Message
-	send(Message) error
+	subscribe(string) chan message.Message
+	send(message.Message) error
 }
 
 // retrieves messages from a PriorityQuerer and sends them to subscribers
@@ -17,7 +19,7 @@ type popper interface {
 // subscriptions are a list of channels subscribers have requested based upon a subject
 type queuePopper struct {
 	messageQueue  priorityQueuer
-	Subscriptions map[string][]chan (Message)
+	Subscriptions map[string][]chan (message.Message)
 }
 
 // creates a new queuePopper
@@ -30,17 +32,17 @@ func newQueuePopper(pq priorityQueuer) (*queuePopper, error) {
 
 	mp := queuePopper{
 		messageQueue:  pq,
-		Subscriptions: map[string][]chan (Message){},
+		Subscriptions: map[string][]chan (message.Message){},
 	}
 
 	return &mp, nil
 }
 
 // adds a channel to a list of channels underneath a subject name and returns the channel to the requester
-func (mp *queuePopper) subscribe(subject string) chan Message {
+func (mp *queuePopper) subscribe(subject string) chan message.Message {
 	subscription := mp.Subscriptions[subject]
 
-	subscriber := make(chan Message)
+	subscriber := make(chan message.Message)
 
 	subscription = append(subscription, subscriber)
 
@@ -68,22 +70,16 @@ func (mp *queuePopper) start() {
 	}()
 }
 
-type EmptySubscriptionError struct{}
-
-func (m *EmptySubscriptionError) Error() string {
-	return "cannot sends message for subject with no subscribers"
-}
-
 // gets a messages subject and then sends the message through all of the channels subscribed
-func (mp *queuePopper) send(m Message) error {
+func (mp *queuePopper) send(m message.Message) error {
 	subscription := mp.Subscriptions[m.Subject]
 
 	if len(subscription) == 0 {
-		return &EmptySubscriptionError{}
+		return &emptySubscriptionError{}
 	}
 
 	for _, subscriber := range subscription {
-		go func(subscriber chan Message) {
+		go func(subscriber chan message.Message) {
 			subscriber <- m
 		}(subscriber)
 	}

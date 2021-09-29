@@ -1,19 +1,20 @@
-package courier
+package testing
 
 import (
 	"fmt"
 	"math/rand"
 
 	"github.com/google/uuid"
+	"github.com/platform-edn/courier/node"
 )
 
-type testNodeOptions struct {
+type TestNodeOptions struct {
 	SubscribedSubjects  []string
 	BroadcastedSubjects []string
 }
 
-func createTestNodes(count int, options *testNodeOptions) []*Node {
-	nodes := []*Node{}
+func CreateTestNodes(count int, options *TestNodeOptions) []*node.Node {
+	nodes := []*node.Node{}
 	var broadSubjects []string
 	var subSubjects []string
 
@@ -44,7 +45,7 @@ func createTestNodes(count int, options *testNodeOptions) []*Node {
 			broads = append(broads, broadSubjects[i])
 		}
 
-		n := NewNode(uuid.NewString(), ip, port, subs, broads)
+		n := node.NewNode(uuid.NewString(), ip, port, subs, broads)
 		nodes = append(nodes, n)
 	}
 

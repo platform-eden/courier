@@ -3,10 +3,12 @@ package courier
 import (
 	"errors"
 	"time"
+
+	"github.com/platform-edn/courier/observer"
 )
 
 type CourierOptions struct {
-	NodeStore           NodeStorer
+	NodeStore           observer.NodeStorer
 	ObserveInterval     time.Duration
 	BroadcastedSubjects []string
 	SubscribedSubjects  []string
@@ -15,7 +17,7 @@ type CourierOptions struct {
 }
 
 type Courier struct {
-	storeObserver       *storeObserver
+	storeObserver       *observer.StoreObserver
 	BroadcastedSubjects []string
 	SubscribedSubjects  []string
 	Address             string
@@ -45,9 +47,9 @@ func NewCourier(options CourierOptions) (*Courier, error) {
 			return nil, errors.New("cannot have a time interval that is unset or equal to 0")
 		}
 
-		c.storeObserver = NewStoreObserver(options.NodeStore, options.ObserveInterval, options.BroadcastedSubjects)
+		c.storeObserver = observer.NewStoreObserver(options.NodeStore, options.ObserveInterval, options.BroadcastedSubjects)
 		// clientChannel := c.storeObserver.listenChannel()
-		c.storeObserver.start()
+		c.storeObserver.Start()
 	}
 
 	return &c, nil

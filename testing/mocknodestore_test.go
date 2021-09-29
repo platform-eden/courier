@@ -1,52 +1,54 @@
-package courier
+package testing
 
 import (
 	"testing"
+
+	"github.com/platform-edn/courier/node"
 )
 
 func TestNewMockNodeStore(t *testing.T) {
 	sub := []string{"sub1", "sub2", "sub3"}
 	broad := []string{"broad1", "broad2", "broad3"}
 
-	nodes := createTestNodes(5, &testNodeOptions{
+	nodes := CreateTestNodes(5, &TestNodeOptions{
 		SubscribedSubjects:  sub,
 		BroadcastedSubjects: broad,
 	})
 
 	store := NewMockNodeStore(nodes...)
 
-	for _, node := range nodes {
+	for _, n := range nodes {
 
-		for _, subject := range node.SubscribedSubjects {
+		for _, subject := range n.SubscribedSubjects {
 			subnodes, ok := store.SubscribeNodes[subject]
 			if !ok {
-				t.Fatalf("expected to find node %s subscribed to subject but subject %s doesn't exist", node.Id, subject)
+				t.Fatalf("expected to find node %s subscribed to subject but subject %s doesn't exist", n.Id, subject)
 			}
 
 			found := false
 			for _, s := range subnodes {
-				if s.Id == node.Id {
+				if s.Id == n.Id {
 					found = true
 				}
 			}
 			if !found {
-				t.Fatalf("expected to find node %s subscribed to subject %s but it was not found", node.Id, subject)
+				t.Fatalf("expected to find node %s subscribed to subject %s but it was not found", n.Id, subject)
 			}
 		}
 
-		for _, subject := range node.BroadcastedSubjects {
+		for _, subject := range n.BroadcastedSubjects {
 			broadnodes, ok := store.BroadCastNodes[subject]
 			if !ok {
-				t.Fatalf("expected to find node %s broadcasting to subject %s but it was not found", node.Id, subject)
+				t.Fatalf("expected to find node %s broadcasting to subject %s but it was not found", n.Id, subject)
 			}
 			found := false
 			for _, s := range broadnodes {
-				if s.Id == node.Id {
+				if s.Id == n.Id {
 					found = true
 				}
 			}
 			if !found {
-				t.Fatalf("expected to find node %s subscribed to subject %s but it was not found", node.Id, subject)
+				t.Fatalf("expected to find node %s subscribed to subject %s but it was not found", n.Id, subject)
 			}
 		}
 	}
@@ -56,21 +58,21 @@ func TestMockNodeStore_GetSubscribers(t *testing.T) {
 	sub := []string{"sub1", "sub2", "sub3"}
 	broad := []string{"broad1", "broad2", "broad3"}
 
-	nodes := createTestNodes(10, &testNodeOptions{
+	nodes := CreateTestNodes(10, &TestNodeOptions{
 		SubscribedSubjects:  sub,
 		BroadcastedSubjects: broad,
 	})
 
-	subnodes := []*Node{}
+	subnodes := []*node.Node{}
 
-	for _, node := range nodes {
-		for _, subject := range node.SubscribedSubjects {
+	for _, n := range nodes {
+		for _, subject := range n.SubscribedSubjects {
 			if subject == "sub2" {
-				subnodes = append(subnodes, node)
+				subnodes = append(subnodes, n)
 			}
 
 			if subject == "sub3" {
-				subnodes = append(subnodes, node)
+				subnodes = append(subnodes, n)
 			}
 		}
 	}
@@ -90,28 +92,28 @@ func TestMockNodeStore_AddNode(t *testing.T) {
 	sub := []string{"sub1", "sub2", "sub3"}
 	broad := []string{"broad1", "broad2", "broad3"}
 
-	node := createTestNodes(1, &testNodeOptions{
+	n := CreateTestNodes(1, &TestNodeOptions{
 		SubscribedSubjects:  sub,
 		BroadcastedSubjects: broad,
 	})[0]
 
-	store.AddNode(node)
+	store.AddNode(n)
 
-	for _, subject := range node.SubscribedSubjects {
+	for _, subject := range n.SubscribedSubjects {
 		_, ok := store.SubscribeNodes[subject]
 		if !ok {
-			t.Fatalf("expected to find node %s subscribed to subject %s but it was not found", node.Id, subject)
+			t.Fatalf("expected to find node %s subscribed to subject %s but it was not found", n.Id, subject)
 		}
 	}
 
-	for _, subject := range node.BroadcastedSubjects {
+	for _, subject := range n.BroadcastedSubjects {
 		_, ok := store.BroadCastNodes[subject]
 		if !ok {
-			t.Fatalf("expected to find node %s broadcasting to subject %s but it was not found", node.Id, subject)
+			t.Fatalf("expected to find node %s broadcasting to subject %s but it was not found", n.Id, subject)
 		}
 	}
 
-	store.AddNode(node)
+	store.AddNode(n)
 }
 
 func TestMockNodeStore_RemoveNode(t *testing.T) {
@@ -120,28 +122,28 @@ func TestMockNodeStore_RemoveNode(t *testing.T) {
 	sub := []string{"sub1", "sub2", "sub3"}
 	broad := []string{"broad1", "broad2", "broad3"}
 
-	node := createTestNodes(1, &testNodeOptions{
+	n := CreateTestNodes(1, &TestNodeOptions{
 		SubscribedSubjects:  sub,
 		BroadcastedSubjects: broad,
 	})[0]
 
-	store.RemoveNode(node)
-	store.AddNode(node)
-	store.RemoveNode(node)
+	store.RemoveNode(n)
+	store.AddNode(n)
+	store.RemoveNode(n)
 
-	for _, subject := range node.SubscribedSubjects {
+	for _, subject := range n.SubscribedSubjects {
 		subnodes := store.SubscribeNodes[subject]
 		if len(subnodes) != 0 {
-			t.Fatalf("expected to find node %s subscribed to subject %s but it was not found", node.Id, subject)
+			t.Fatalf("expected to find node %s subscribed to subject %s but it was not found", n.Id, subject)
 		}
 	}
 
-	for _, subject := range node.BroadcastedSubjects {
+	for _, subject := range n.BroadcastedSubjects {
 		broadnodes := store.BroadCastNodes[subject]
 		if len(broadnodes) != 0 {
-			t.Fatalf("expected to find node %s subscribed to subject %s but it was not found", node.Id, subject)
+			t.Fatalf("expected to find node %s subscribed to subject %s but it was not found", n.Id, subject)
 		}
 	}
 
-	store.RemoveNode(node)
+	store.RemoveNode(n)
 }

@@ -1,16 +1,18 @@
-package courier
+package messagehandler
 
 import (
 	"testing"
 	"time"
+
+	"github.com/platform-edn/courier/message"
 )
 
 func TestNewQueuePopper(t *testing.T) {
 	pq := newPriorityQueue()
 
 	m1 := pqMessage{
-		Message:  NewPubMessage("test", []byte("test")),
-		Priority: int(PubMessage),
+		Message:  message.NewPubMessage("test", []byte("test")),
+		Priority: int(message.PubMessage),
 	}
 
 	//increase queue size
@@ -42,8 +44,8 @@ func TestQueuePopper_Subscribe(t *testing.T) {
 
 	go func() {
 		m1 := pqMessage{
-			Message:  NewPubMessage("test", []byte("test")),
-			Priority: int(PubMessage),
+			Message:  message.NewPubMessage("test", []byte("test")),
+			Priority: int(message.PubMessage),
 		}
 
 		pq.safePush(&m1)
@@ -67,7 +69,7 @@ func TestQueuePopper_Send(t *testing.T) {
 		t.Fatalf("could not create message popper: %s", err)
 	}
 
-	m1 := NewPubMessage("test", []byte("test"))
+	m1 := message.NewPubMessage("test", []byte("test"))
 
 	err = mp.send(m1)
 	if err == nil {

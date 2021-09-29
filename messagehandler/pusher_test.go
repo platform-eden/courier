@@ -1,18 +1,19 @@
-package courier
+package messagehandler
 
 import (
 	"log"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/platform-edn/courier/message"
 )
 
 func TestNewQueuePusher(t *testing.T) {
 	pq := newPriorityQueue()
 
 	m1 := pqMessage{
-		Message:  NewPubMessage("test", []byte("test")),
-		Priority: int(PubMessage),
+		Message:  message.NewPubMessage("test", []byte("test")),
+		Priority: int(message.PubMessage),
 	}
 
 	// increase size of queue
@@ -41,11 +42,11 @@ func TestQueuePusher_Listen(t *testing.T) {
 
 	mp.start()
 
-	m1 := NewPubMessage("test", []byte("test"))
-	m2 := NewReqMessage("test", []byte("test"))
-	m3 := NewRespMessage(uuid.NewString(), "test", []byte("test"))
+	m1 := message.NewPubMessage("test", []byte("test"))
+	m2 := message.NewReqMessage("test", []byte("test"))
+	m3 := message.NewRespMessage(uuid.NewString(), "test", []byte("test"))
 
-	messageList := []Message{m1, m2, m3}
+	messageList := []message.Message{m1, m2, m3}
 
 	mchan := mp.pushChannel()
 

@@ -1,4 +1,4 @@
-package courier
+package message
 
 import (
 	"github.com/google/uuid"

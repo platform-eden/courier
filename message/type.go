@@ -1,4 +1,4 @@
-package courier
+package message
 
 // the types of message that can be created
 // assigned based on what kind interaction the sender of the message wants with receiver
