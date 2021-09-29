@@ -8,11 +8,13 @@ import (
 	"github.com/platform-edn/courier/node"
 )
 
+// TestNodeOptions that can be passed into CreateTestNodes
 type TestNodeOptions struct {
 	SubscribedSubjects  []string
 	BroadcastedSubjects []string
 }
 
+// CreateTestNodes creates a quantity of randomized nodes based on the options passed in
 func CreateTestNodes(count int, options *TestNodeOptions) []*node.Node {
 	nodes := []*node.Node{}
 	var broadSubjects []string

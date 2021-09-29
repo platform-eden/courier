@@ -7,6 +7,7 @@ import (
 	"github.com/platform-edn/courier/observer"
 )
 
+// CourierOptions to pass to NewCourier for creating a Courier struct
 type CourierOptions struct {
 	NodeStore           observer.NodeStorer
 	ObserveInterval     time.Duration
@@ -16,6 +17,7 @@ type CourierOptions struct {
 	Port                string
 }
 
+// Courier is a messaging and node discovery service
 type Courier struct {
 	storeObserver       *observer.StoreObserver
 	BroadcastedSubjects []string
@@ -24,6 +26,7 @@ type Courier struct {
 	Port                string
 }
 
+// NewCourier creates a new Courier service
 func NewCourier(options CourierOptions) (*Courier, error) {
 	if options.NodeStore == nil {
 		return nil, errors.New("must have a NodeStore set in order to instantiate courier service")
