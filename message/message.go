@@ -13,9 +13,9 @@ type Message struct {
 }
 
 // NewPubMessage creates a new publish message
-func NewPubMessage(subject string, content []byte) Message {
+func NewPubMessage(id string, subject string, content []byte) Message {
 	m := Message{
-		Id:      uuid.New().String(),
+		Id:      id,
 		Type:    PubMessage,
 		Subject: subject,
 		Content: content,
@@ -25,7 +25,7 @@ func NewPubMessage(subject string, content []byte) Message {
 }
 
 // NewReqMessage creates a new request message
-func NewReqMessage(subject string, content []byte) Message {
+func NewReqMessage(id string, subject string, content []byte) Message {
 	m := Message{
 		Id:      uuid.New().String(),
 		Type:    ReqMessage,

@@ -4,18 +4,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/platform-edn/courier/mock"
 	"github.com/platform-edn/courier/node"
-	test "github.com/platform-edn/courier/testing"
 )
 
 func TestStoreObserver_Start(t *testing.T) {
 	nodecount := 10
 	subjects := []string{"sub1", "sub2", "sub3"}
-	nodes := test.CreateTestNodes(nodecount, &test.TestNodeOptions{
+	nodes := mock.CreateTestNodes(nodecount, &mock.TestNodeOptions{
 		SubscribedSubjects:  subjects,
 		BroadcastedSubjects: []string{"broad1", "broad2", "broad3"},
 	})
-	store := test.NewMockNodeStore(nodes...)
+	store := mock.NewMockNodeStore(nodes...)
 	observer := NewStoreObserver(store, (time.Second * 1), subjects)
 
 	nodeChannel := observer.ListenChannel()
@@ -31,7 +31,7 @@ func TestStoreObserver_Start(t *testing.T) {
 		timer.Stop()
 	}
 
-	newNode := test.CreateTestNodes(1, &test.TestNodeOptions{
+	newNode := mock.CreateTestNodes(1, &mock.TestNodeOptions{
 		SubscribedSubjects:  subjects,
 		BroadcastedSubjects: []string{"broad1", "broad2", "broad3"},
 	})[0]
@@ -50,7 +50,7 @@ func TestStoreObserver_Start(t *testing.T) {
 func TestCompareNodes(t *testing.T) {
 	nodecount := 10
 	subjects := []string{"sub1", "sub2", "sub3"}
-	nodes := test.CreateTestNodes(nodecount, &test.TestNodeOptions{
+	nodes := mock.CreateTestNodes(nodecount, &mock.TestNodeOptions{
 		SubscribedSubjects:  subjects,
 		BroadcastedSubjects: []string{"broad1", "broad2", "broad3"},
 	})
@@ -62,7 +62,7 @@ func TestCompareNodes(t *testing.T) {
 	}
 
 	removedNode := nodes[0]
-	addedNode := test.CreateTestNodes(1, &test.TestNodeOptions{
+	addedNode := mock.CreateTestNodes(1, &mock.TestNodeOptions{
 		SubscribedSubjects:  subjects,
 		BroadcastedSubjects: []string{"broad1", "broad2", "broad3"},
 	})[0]

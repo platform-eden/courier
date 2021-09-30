@@ -1,4 +1,4 @@
-package messagehandler
+package proxy
 
 type emptySubscriptionError struct{}
 
