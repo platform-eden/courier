@@ -1,4 +1,4 @@
-package lock
+package mock
 
 import (
 	"runtime"

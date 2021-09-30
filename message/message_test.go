@@ -7,7 +7,7 @@ import (
 )
 
 func TestNewPubMessage(t *testing.T) {
-	m := NewPubMessage("test", []byte("test"))
+	m := NewPubMessage(uuid.NewString(), "test", []byte("test"))
 
 	if m.Id == "" {
 		t.Fatal("expected PubMessage to set id")
@@ -19,7 +19,7 @@ func TestNewPubMessage(t *testing.T) {
 }
 
 func TestNewReqMessage(t *testing.T) {
-	m := NewReqMessage("test", []byte("test"))
+	m := NewReqMessage(uuid.NewString(), "test", []byte("test"))
 
 	if m.Id == "" {
 		t.Fatal("expected PubMessage to set id")
