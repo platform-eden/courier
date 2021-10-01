@@ -1,11 +1,12 @@
 package mock
 
 import (
+	"github.com/platform-edn/courier/lock"
 	"github.com/platform-edn/courier/node"
 )
 
 type MockNodeStore struct {
-	lock           Locker
+	lock           lock.Locker
 	BroadCastNodes map[string][]*node.Node
 	SubscribeNodes map[string][]*node.Node
 }
@@ -42,7 +43,7 @@ func NewMockNodeStore(nodes ...*node.Node) *MockNodeStore {
 	}
 
 	m := MockNodeStore{
-		lock:           NewTicketLock(),
+		lock:           lock.NewTicketLock(),
 		BroadCastNodes: bnodes,
 		SubscribeNodes: snodes,
 	}
