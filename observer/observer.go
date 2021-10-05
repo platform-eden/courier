@@ -10,8 +10,8 @@ import (
 type StoreObserver struct {
 	store           NodeStorer
 	observeInterval time.Duration
-	currentNodes    map[string]*node.Node
-	nodeChannels    []chan (map[string]*node.Node)
+	currentNodes    map[string]node.Node
+	nodeChannels    []chan (map[string]node.Node)
 	subjects        []string
 }
 
@@ -20,8 +20,8 @@ func NewStoreObserver(store NodeStorer, interval time.Duration, subjects []strin
 	s := StoreObserver{
 		store:           store,
 		observeInterval: interval,
-		currentNodes:    map[string]*node.Node{},
-		nodeChannels:    []chan (map[string]*node.Node){},
+		currentNodes:    map[string]node.Node{},
+		nodeChannels:    []chan (map[string]node.Node){},
 		subjects:        subjects,
 	}
 
@@ -29,8 +29,8 @@ func NewStoreObserver(store NodeStorer, interval time.Duration, subjects []strin
 }
 
 // Adds a channel to the StoreObserver that will receive a map of Nodes when the NodeStore has updated Nodes and returns it
-func (s *StoreObserver) ListenChannel() chan (map[string]*node.Node) {
-	channel := make(chan map[string]*node.Node)
+func (s *StoreObserver) ListenChannel() chan (map[string]node.Node) {
+	channel := make(chan map[string]node.Node)
 	s.nodeChannels = append(s.nodeChannels, channel)
 
 	return channel
@@ -65,8 +65,8 @@ func (s *StoreObserver) Start() {
 
 // compares the Nodes returned from the NodeStore with the current Nodes in the service.
 // If there are differences, this will return true with an updated map of Nodes.
-func compareNodes(potential []*node.Node, expired map[string]*node.Node) (map[string]*node.Node, bool) {
-	current := map[string]*node.Node{}
+func compareNodes(potential []*node.Node, expired map[string]node.Node) (map[string]node.Node, bool) {
+	current := map[string]node.Node{}
 	new := map[string]*node.Node{}
 	updated := false
 
@@ -74,12 +74,12 @@ func compareNodes(potential []*node.Node, expired map[string]*node.Node) (map[st
 		_, ok := expired[node.Id]
 
 		if ok {
-			current[node.Id] = node
+			current[node.Id] = *node
 			delete(expired, node.Id)
 		} else {
 			_, ok := new[node.Id]
 			if !ok {
-				current[node.Id] = node
+				current[node.Id] = *node
 				new[node.Id] = node
 				updated = true
 			}

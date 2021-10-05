@@ -4,38 +4,34 @@ import (
 	"fmt"
 
 	"github.com/platform-edn/courier/lock"
+	"github.com/platform-edn/courier/node"
 )
 
 type responseMap struct {
-	responses map[string]*ResponseInfo
+	responses map[string]*node.ResponseInfo
 	lock      *lock.TicketLock
 }
 
-type ResponseInfo struct {
-	Address string
-	Port    string
-}
-
-func NewResponseMap() *responseMap {
+func newResponseMap() *responseMap {
 	r := responseMap{
-		responses: make(map[string]*ResponseInfo),
+		responses: make(map[string]*node.ResponseInfo),
 		lock:      lock.NewTicketLock(),
 	}
 
 	return &r
 }
 
-func (r *responseMap) PushResponse(messageId string, returnAdress string, returnPort string) {
+func (r *responseMap) PushResponse(response node.ResponseInfo) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
-	r.responses[messageId] = &ResponseInfo{
-		Address: returnAdress,
-		Port:    returnPort,
+	r.responses[response.Id] = &node.ResponseInfo{
+		Address: response.Address,
+		Port:    response.Port,
 	}
 }
 
-func (r *responseMap) PopResponse(messageId string) (*ResponseInfo, error) {
+func (r *responseMap) PopResponse(messageId string) (*node.ResponseInfo, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 

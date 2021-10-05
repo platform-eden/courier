@@ -1,46 +1,55 @@
 package client
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/platform-edn/courier/node"
+)
 
 func TestResponseMap_PushResponse(t *testing.T) {
-	responses := NewResponseMap()
-	id := "10"
-	address := "test.com"
-	port := "80"
+	responses := newResponseMap()
 
-	responses.PushResponse(id, address, port)
+	response := node.ResponseInfo{
+		Id:      "10",
+		Address: "test.com",
+		Port:    "80",
+	}
 
-	info, ok := responses.responses[id]
+	responses.PushResponse(response)
+
+	info, ok := responses.responses[response.Id]
 	if !ok {
 		t.Fatal("expected response to be added but it wasn't")
 	}
-	if info.Port != port {
-		t.Fatalf("expected response port to be %s but got %s", port, info.Port)
+	if info.Port != response.Port {
+		t.Fatalf("expected response port to be %s but got %s", response.Port, info.Port)
 	}
-	if info.Address != address {
-		t.Fatalf("expected response address to be %s but got %s", address, info.Address)
+	if info.Address != response.Address {
+		t.Fatalf("expected response address to be %s but got %s", response.Address, info.Address)
 	}
 }
 
 func TestResponseMap_PopResponse(t *testing.T) {
-	responses := NewResponseMap()
-	id := "10"
-	address := "test.com"
-	port := "80"
+	responses := newResponseMap()
+	response := node.ResponseInfo{
+		Id:      "10",
+		Address: "test.com",
+		Port:    "80",
+	}
 
-	responses.PushResponse(id, address, port)
-	info, err := responses.PopResponse(id)
+	responses.PushResponse(response)
+	info, err := responses.PopResponse(response.Id)
 	if err != nil {
 		t.Fatalf("error popping response: %s", err)
 	}
-	if info.Port != port {
-		t.Fatalf("expected response port to be %s but got %s", port, info.Port)
+	if info.Port != response.Port {
+		t.Fatalf("expected response port to be %s but got %s", response.Port, info.Port)
 	}
-	if info.Address != address {
-		t.Fatalf("expected response address to be %s but got %s", address, info.Address)
+	if info.Address != response.Address {
+		t.Fatalf("expected response address to be %s but got %s", response.Address, info.Address)
 	}
 
-	_, err = responses.PopResponse(id)
+	_, err = responses.PopResponse(response.Id)
 	if err == nil {
 		t.Fatalf("expected popping a nonexistant response to return an err but it passed")
 	}

@@ -9,7 +9,7 @@ import (
 )
 
 func TestSubscriberMap_AddSubscriber(t *testing.T) {
-	subMap := NewSubscriberMap()
+	subMap := newSubscriberMap()
 	subjects := []string{"sub", "sub1", "sub2"}
 
 	nodes := mock.CreateTestNodes(10, &mock.TestNodeOptions{
@@ -17,7 +17,7 @@ func TestSubscriberMap_AddSubscriber(t *testing.T) {
 	})
 	node := nodes[0]
 
-	subMap.AddSubscriber(node)
+	subMap.AddSubscriber(*node)
 
 	for _, subject := range node.SubscribedSubjects {
 		if len(subMap.subscribers[subject]) == 0 {
@@ -25,7 +25,7 @@ func TestSubscriberMap_AddSubscriber(t *testing.T) {
 		}
 	}
 
-	subMap.AddSubscriber(node)
+	subMap.AddSubscriber(*node)
 
 	for _, subject := range node.SubscribedSubjects {
 		if len(subMap.subscribers[subject]) != 1 {
@@ -35,7 +35,7 @@ func TestSubscriberMap_AddSubscriber(t *testing.T) {
 }
 
 func TestSubscriberMap_RemoveSubscriber(t *testing.T) {
-	subMap := NewSubscriberMap()
+	subMap := newSubscriberMap()
 	subjects := []string{"sub", "sub1", "sub2"}
 	nodes := mock.CreateTestNodes(2, &mock.TestNodeOptions{
 		SubscribedSubjects: subjects,
@@ -83,53 +83,62 @@ func TestSubscriberMap_RemoveSubscriber(t *testing.T) {
 func TestSubscriberMap_SubjectSubscribers(t *testing.T) {
 	length := 5
 	subjects := []string{"sub", "sub1"}
-	nodes := mock.CreateTestNodes(length, &mock.TestNodeOptions{
-		SubscribedSubjects: subjects,
-	})
-	subMap := NewSubscriberMap()
-	subnodes := []*node.Node{}
-	sub1nodes := []*node.Node{}
+	nodes := mock.CreateTestNodes(length, &mock.TestNodeOptions{SubscribedSubjects: subjects})
+	nl := []node.Node{}
 
-	for _, node := range nodes {
-		subMap.AddSubscriber(node)
-		for _, subject := range node.SubscribedSubjects {
+	for _, n := range nodes {
+		nl = append(nl, *n)
+	}
+	subMap := newSubscriberMap()
+	subnodes := []node.Node{}
+	sub1nodes := []node.Node{}
+
+	for _, n := range nl {
+		subMap.AddSubscriber(n)
+		for _, subject := range n.SubscribedSubjects {
 			if subject == "sub" {
-				subnodes = append(subnodes, node)
+				subnodes = append(subnodes, n)
 			} else {
-				sub1nodes = append(sub1nodes, node)
+				sub1nodes = append(sub1nodes, n)
 			}
 		}
 	}
 
-	subscribers, err := subMap.SubjectSubscribers("sub")
-	if err != nil {
-		t.Fatalf("expected getting subscribers to pass but it failed: %s", err)
-	}
-	subscribers1, err := subMap.SubjectSubscribers("sub1")
-	if err != nil {
-		t.Fatalf("expected getting subscribers to pass but it failed: %s", err)
+	if len(subnodes) > 0 {
+		subscribers, err := subMap.SubjectSubscribers("sub")
+		if err != nil {
+			t.Fatalf("expected getting subscribers to pass but it failed: %s", err)
+		}
+
+		if len(subscribers) != len(subnodes) {
+			t.Fatalf("expected list of subscribers to have a length of %v but got %v", len(subnodes), len(subscribers))
+		}
 	}
 
-	_, err = subMap.SubjectSubscribers("sub2")
+	if len(sub1nodes) > 0 {
+		subscribers1, err := subMap.SubjectSubscribers("sub1")
+		if err != nil {
+			t.Fatalf("expected getting subscribers to pass but it failed: %s", err)
+		}
+
+		if len(subscribers1) != len(sub1nodes) {
+			t.Fatalf("expected list of subscribers to have a length of %v but got %v", len(sub1nodes), len(subscribers1))
+		}
+	}
+
+	_, err := subMap.SubjectSubscribers("sub2")
 	if err == nil {
 		t.Fatal("expected getting subscribers to fail when fetching nonexistant subject but it passed")
-	}
-
-	if len(subscribers) != len(subnodes) {
-		t.Fatalf("expected list of subscribers to have a length of %v but got %v", len(subnodes), len(subscribers))
-	}
-	if len(subscribers1) != len(sub1nodes) {
-		t.Fatalf("expected list of subscribers to have a length of %v but got %v", len(sub1nodes), len(subscribers1))
 	}
 }
 
 func TestSubscriberMap_GetAllSubscribers(t *testing.T) {
 	length := 5
 	nodes := mock.CreateTestNodes(length, &mock.TestNodeOptions{})
-	subMap := NewSubscriberMap()
+	subMap := newSubscriberMap()
 
 	for _, node := range nodes {
-		subMap.AddSubscriber(node)
+		subMap.AddSubscriber(*node)
 	}
 
 	subscribers := subMap.AllSubscribers()

@@ -12,7 +12,7 @@ type subscriberMap struct {
 	lock        *lock.TicketLock
 }
 
-func NewSubscriberMap() *subscriberMap {
+func newSubscriberMap() *subscriberMap {
 	s := subscriberMap{
 		subscribers: make(map[string][]*node.Node),
 		lock:        lock.NewTicketLock(),
@@ -23,7 +23,7 @@ func NewSubscriberMap() *subscriberMap {
 
 // Goes through a node's subscribed subjects and updates the subscriber map if
 // they aren't present under one of their subscribed subjects.
-func (s *subscriberMap) AddSubscriber(subscriber *node.Node) {
+func (s *subscriberMap) AddSubscriber(subscriber node.Node) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -31,7 +31,7 @@ func (s *subscriberMap) AddSubscriber(subscriber *node.Node) {
 		_, exists := findSubscriber(s.subscribers[subject], subscriber.Id)
 
 		if !exists {
-			s.subscribers[subject] = append(s.subscribers[subject], subscriber)
+			s.subscribers[subject] = append(s.subscribers[subject], &subscriber)
 		}
 	}
 }

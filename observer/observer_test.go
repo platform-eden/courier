@@ -55,10 +55,10 @@ func TestCompareNodes(t *testing.T) {
 		BroadcastedSubjects: []string{"broad1", "broad2", "broad3"},
 	})
 
-	nodeMap := map[string]*node.Node{}
+	nodeMap := map[string]node.Node{}
 
 	for _, n := range nodes {
-		nodeMap[n.Id] = n
+		nodeMap[n.Id] = *n
 	}
 
 	removedNode := nodes[0]
