@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net"
 	"testing"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/platform-edn/courier/message"
+	"github.com/platform-edn/courier/mock"
 	"github.com/platform-edn/courier/node"
 	"github.com/platform-edn/courier/proto"
 	"google.golang.org/grpc"
@@ -32,7 +32,8 @@ func TestMessageServer_PublishMessage(t *testing.T) {
 
 	startTestServer(server)
 
-	client, conn, err := createMessageClient()
+	ctx := context.Background()
+	client, conn, err := mock.NewMockClient(ctx, "bufnet", bufDialer)
 	if err != nil {
 		t.Fatalf("could not create client: %s", err)
 	}
@@ -67,7 +68,8 @@ func TestMessageServer_ResponseMessage(t *testing.T) {
 
 	startTestServer(server)
 
-	client, conn, err := createMessageClient()
+	ctx := context.Background()
+	client, conn, err := mock.NewMockClient(ctx, "bufnet", bufDialer)
 	if err != nil {
 		t.Fatalf("could not create client: %s", err)
 	}
@@ -102,7 +104,8 @@ func TestMessageServer_RequestMessage(t *testing.T) {
 
 	startTestServer(server)
 
-	client, conn, err := createMessageClient()
+	ctx := context.Background()
+	client, conn, err := mock.NewMockClient(ctx, "bufnet", bufDialer)
 	if err != nil {
 		t.Fatalf("could not create client: %s", err)
 	}
@@ -158,16 +161,4 @@ func startTestServer(m *MessageServer) {
 			log.Fatalf("Server exited with error: %v", err)
 		}
 	}()
-}
-
-func createMessageClient() (proto.MessageServerClient, *grpc.ClientConn, error) {
-	ctx := context.Background()
-	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithInsecure())
-	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to dial bufnet: %v", err)
-	}
-
-	client := proto.NewMessageServerClient(conn)
-
-	return client, conn, nil
 }
