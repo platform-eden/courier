@@ -4,6 +4,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/platform-edn/courier/lock"
 	"github.com/platform-edn/courier/node"
 )
 
@@ -13,6 +14,7 @@ type StoreObserver struct {
 	currentNodes    map[string]node.Node
 	nodeChannels    []chan (map[string]node.Node)
 	subjects        []string
+	lock            lock.Locker
 }
 
 // Returns a paused StoreObserver
@@ -23,13 +25,17 @@ func NewStoreObserver(store NodeStorer, interval time.Duration, subjects []strin
 		currentNodes:    map[string]node.Node{},
 		nodeChannels:    []chan (map[string]node.Node){},
 		subjects:        subjects,
+		lock:            lock.NewTicketLock(),
 	}
-
+	s.observe()
 	return &s
 }
 
 // Adds a channel to the StoreObserver that will receive a map of Nodes when the NodeStore has updated Nodes and returns it
 func (s *StoreObserver) ListenChannel() chan (map[string]node.Node) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	channel := make(chan map[string]node.Node)
 	s.nodeChannels = append(s.nodeChannels, channel)
 
@@ -38,7 +44,7 @@ func (s *StoreObserver) ListenChannel() chan (map[string]node.Node) {
 
 // Starts a Goroutine that will begin comparing current nodes and what nodes the NodeStore has.  If the NodeStore updates,
 // it sends a new map of Nodes to each Node Channel listening to the Observer.
-func (s *StoreObserver) Start() {
+func (s *StoreObserver) observe() {
 	go func() {
 		for {
 			timer := time.NewTimer(s.observeInterval)
@@ -55,9 +61,11 @@ func (s *StoreObserver) Start() {
 
 			if updated {
 				s.currentNodes = current
+				s.lock.Lock()
 				for _, channel := range s.nodeChannels {
 					channel <- current
 				}
+				s.lock.Unlock()
 			}
 		}
 	}()

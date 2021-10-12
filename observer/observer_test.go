@@ -20,8 +20,6 @@ func TestStoreObserver_Start(t *testing.T) {
 
 	nodeChannel := observer.ListenChannel()
 
-	observer.Start()
-
 	timer := time.NewTimer(time.Second * 3)
 
 	select {

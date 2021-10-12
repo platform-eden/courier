@@ -23,12 +23,12 @@ type MessageClient struct {
 	options       []grpc.DialOption
 }
 
-func NewMessageClient(info chan node.ResponseInfo, push chan message.Message, node chan map[string]node.Node, ctx context.Context, localAddress string, localPort string, options []grpc.DialOption) *MessageClient {
+func NewMessageClient(info chan node.ResponseInfo, node chan map[string]node.Node, ctx context.Context, localAddress string, localPort string, options []grpc.DialOption) *MessageClient {
 	c := MessageClient{
 		responseMap:   newResponseMap(),
 		subscriberMap: newSubscriberMap(),
 		infoChannel:   info,
-		pushChannel:   push,
+		pushChannel:   make(chan message.Message),
 		nodeChannel:   node,
 		gRPCContext:   ctx,
 		options:       options,

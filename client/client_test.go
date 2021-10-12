@@ -18,13 +18,12 @@ func TestMessageClient_PushChannel(t *testing.T) {
 	defer close(ichan)
 	nchan := make(chan map[string]node.Node)
 	defer close(nchan)
-	pchan := make(chan message.Message)
-	defer close(pchan)
 	ctx := context.Background()
 	address := "test.com"
 	port := "80"
 
-	client := NewMessageClient(ichan, pchan, nchan, ctx, address, port, []grpc.DialOption{})
+	client := NewMessageClient(ichan, nchan, ctx, address, port, []grpc.DialOption{})
+	pchan := client.pushChannel
 
 	if client.pushChannel != pchan {
 		t.Fatalf("expected push channel to be the same as one given but it wasn't")
@@ -36,12 +35,10 @@ func TestMessageClient_ListenForResponseInfo(t *testing.T) {
 	defer close(ichan)
 	nchan := make(chan map[string]node.Node)
 	defer close(nchan)
-	pchan := make(chan message.Message)
-	defer close(pchan)
 	ctx := context.Background()
 	address := "test.com"
 	port := "80"
-	client := NewMessageClient(ichan, pchan, nchan, ctx, address, port, []grpc.DialOption{})
+	client := NewMessageClient(ichan, nchan, ctx, address, port, []grpc.DialOption{})
 	id := uuid.NewString()
 
 	r := node.ResponseInfo{
@@ -78,12 +75,10 @@ func TestMessageClient_ListenForSubscribers(t *testing.T) {
 	defer close(ichan)
 	nchan := make(chan map[string]node.Node)
 	defer close(nchan)
-	pchan := make(chan message.Message)
-	defer close(pchan)
 	ctx := context.Background()
 	address := "test.com"
 	port := "80"
-	client := NewMessageClient(ichan, pchan, nchan, ctx, address, port, []grpc.DialOption{})
+	client := NewMessageClient(ichan, nchan, ctx, address, port, []grpc.DialOption{})
 
 	nodecount := 10
 	subjects := []string{"sub1"}
@@ -106,6 +101,9 @@ func TestMessageClient_ListenForSubscribers(t *testing.T) {
 
 	go func() {
 		for {
+			if client.subscriberMap.TotalSubscribers("sub1") == 0 {
+				continue
+			}
 			subs, e := client.subscriberMap.SubjectSubscribers("sub1")
 			if e != nil {
 				err <- e
@@ -136,8 +134,6 @@ func TestMessageClient_ListenForOutgoingMessages(t *testing.T) {
 	defer close(ichan)
 	nchan := make(chan map[string]node.Node)
 	defer close(nchan)
-	pchan := make(chan message.Message)
-	defer close(pchan)
 	ctx := context.Background()
 	address := "test.com"
 	port := "80"
@@ -153,7 +149,8 @@ func TestMessageClient_ListenForOutgoingMessages(t *testing.T) {
 		grpc.WithInsecure(),
 		grpc.WithContextDialer(s.BufDialer),
 	}
-	client := NewMessageClient(ichan, pchan, nchan, ctx, address, port, options)
+	client := NewMessageClient(ichan, nchan, ctx, address, port, options)
+	pchan := client.pushChannel
 
 	client.subscriberMap.AddSubscriber(*n)
 

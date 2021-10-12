@@ -9,18 +9,26 @@ import (
 )
 
 type MessageServer struct {
-	pushChannel chan message.Message
-	infoChannel chan node.ResponseInfo
+	pushChannel     chan message.Message
+	responseChannel chan node.ResponseInfo
 	proto.UnimplementedMessageServerServer
 }
 
-func NewMessageServer(push chan message.Message, info chan node.ResponseInfo) *MessageServer {
+func NewMessageServer() *MessageServer {
 	m := MessageServer{
-		pushChannel: push,
-		infoChannel: info,
+		pushChannel:     make(chan message.Message),
+		responseChannel: make(chan node.ResponseInfo),
 	}
 
 	return &m
+}
+
+func (m *MessageServer) PushChannel() chan message.Message {
+	return m.pushChannel
+}
+
+func (m *MessageServer) ResponseChannel() chan node.ResponseInfo {
+	return m.responseChannel
 }
 
 func (m *MessageServer) PublishMessage(ctx context.Context, request *proto.PublishMessageRequest) (*proto.PublishMessageResponse, error) {
@@ -42,7 +50,7 @@ func (m *MessageServer) RequestMessage(ctx context.Context, request *proto.Reque
 	}
 
 	m.pushChannel <- req
-	m.infoChannel <- info
+	m.responseChannel <- info
 
 	response := proto.RequestMessageResponse{}
 

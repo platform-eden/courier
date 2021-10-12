@@ -8,6 +8,25 @@ import (
 	"github.com/platform-edn/courier/node"
 )
 
+func TestSubscriberMap_TotalSubscribers(t *testing.T) {
+	subMap := newSubscriberMap()
+	subjects := []string{"sub", "sub1", "sub2"}
+	count := 10
+	nodes := mock.CreateTestNodes(count, &mock.TestNodeOptions{
+		SubscribedSubjects: subjects,
+	})
+
+	for _, n := range nodes {
+		subMap.AddSubscriber(*n)
+	}
+
+	total := subMap.TotalSubscribers("sub")
+
+	if total != count {
+		t.Fatalf("expected %v nodes to have subject sub but only %v did", count, total)
+	}
+}
+
 func TestSubscriberMap_AddSubscriber(t *testing.T) {
 	subMap := newSubscriberMap()
 	subjects := []string{"sub", "sub1", "sub2"}

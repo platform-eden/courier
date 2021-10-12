@@ -11,10 +11,7 @@ import (
 func TestMessageProxy_Subscribe(t *testing.T) {
 	push := make(chan message.Message)
 	defer close(push)
-	quit := make(chan bool)
-	defer close(quit)
-
-	p := NewMessageProxy(push, quit)
+	p := NewMessageProxy(push)
 
 	sub := p.Subscribe("test")
 
@@ -31,17 +28,12 @@ func TestMessageProxy_Subscribe(t *testing.T) {
 	case <-time.After(time.Second * 1):
 		t.Fatal("timeout waitng on subscribe channel")
 	}
-
-	quit <- true
 }
 
 func TestSend(t *testing.T) {
 	push := make(chan message.Message)
 	defer close(push)
-	quit := make(chan bool)
-	defer close(quit)
-
-	p := NewMessageProxy(push, quit)
+	p := NewMessageProxy(push)
 
 	m1 := message.NewPubMessage(uuid.NewString(), "test", []byte("test"))
 	err := send(m1, p.Subscriptions)
@@ -64,17 +56,13 @@ func TestSend(t *testing.T) {
 	case <-time.After(time.Second * 1):
 		t.Fatal("timeout waitng on subscribe channel")
 	}
-
-	quit <- true
 }
 
 func TestMessageProxy_Start(t *testing.T) {
 	push := make(chan message.Message)
 	defer close(push)
-	quit := make(chan bool)
-	defer close(quit)
 
-	p := NewMessageProxy(push, quit)
+	p := NewMessageProxy(push)
 
 	sub := p.Subscribe("test")
 
@@ -94,6 +82,4 @@ func TestMessageProxy_Start(t *testing.T) {
 	case <-time.After(time.Second * 1):
 		t.Fatal("timeout waitng on subscribe channel")
 	}
-
-	quit <- true
 }
