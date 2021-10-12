@@ -21,6 +21,13 @@ func newSubscriberMap() *subscriberMap {
 	return &s
 }
 
+func (s *subscriberMap) TotalSubscribers(subject string) int {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	return len(s.subscribers[subject])
+}
+
 // Goes through a node's subscribed subjects and updates the subscriber map if
 // they aren't present under one of their subscribed subjects.
 func (s *subscriberMap) AddSubscriber(subscriber node.Node) {

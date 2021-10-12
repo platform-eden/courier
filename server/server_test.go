@@ -8,9 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/platform-edn/courier/message"
 	"github.com/platform-edn/courier/mock"
-	"github.com/platform-edn/courier/node"
 	"github.com/platform-edn/courier/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
@@ -25,10 +23,8 @@ func bufDialer(context.Context, string) (net.Conn, error) {
 }
 
 func TestMessageServer_PublishMessage(t *testing.T) {
-	push := make(chan message.Message)
-	info := make(chan node.ResponseInfo)
-
-	server := NewMessageServer(push, info)
+	server := NewMessageServer()
+	push := server.PushChannel()
 
 	startTestServer(server)
 
@@ -61,10 +57,8 @@ func TestMessageServer_PublishMessage(t *testing.T) {
 }
 
 func TestMessageServer_ResponseMessage(t *testing.T) {
-	push := make(chan message.Message)
-	info := make(chan node.ResponseInfo)
-
-	server := NewMessageServer(push, info)
+	server := NewMessageServer()
+	push := server.PushChannel()
 
 	startTestServer(server)
 
@@ -97,10 +91,9 @@ func TestMessageServer_ResponseMessage(t *testing.T) {
 }
 
 func TestMessageServer_RequestMessage(t *testing.T) {
-	push := make(chan message.Message)
-	info := make(chan node.ResponseInfo)
-
-	server := NewMessageServer(push, info)
+	server := NewMessageServer()
+	push := server.PushChannel()
+	info := server.ResponseChannel()
 
 	startTestServer(server)
 

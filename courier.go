@@ -1,13 +1,14 @@
 package courier
 
 import (
-	"errors"
+	"context"
 	"fmt"
+	"log"
 	"net"
 	"time"
 
+	"github.com/platform-edn/courier/client"
 	"github.com/platform-edn/courier/message"
-	"github.com/platform-edn/courier/node"
 	"github.com/platform-edn/courier/observer"
 	"github.com/platform-edn/courier/proto"
 	"github.com/platform-edn/courier/proxy"
@@ -15,14 +16,56 @@ import (
 	"google.golang.org/grpc"
 )
 
-// CourierOptions to pass to NewCourier for creating a Courier struct
-type CourierOptions struct {
-	NodeStore           observer.NodeStorer
-	ObserveInterval     time.Duration
-	BroadcastedSubjects []string
-	SubscribedSubjects  []string
-	Address             string
-	Port                string
+// CourierOption is a set of options that may be passed as parameters when creating a Courier object
+type CourierOption func(c *Courier)
+
+// Subscribes sets the subjects the Courier services will listen for
+func Subscribes(subjects ...string) CourierOption {
+	return func(c *Courier) {
+		c.SubscribedSubjects = subjects
+	}
+}
+
+// Broadcasts sets the subjects Courier services will produce on
+func Broadcasts(subjects ...string) CourierOption {
+	return func(c *Courier) {
+		c.BroadcastedSubjects = subjects
+	}
+}
+
+// ListensOnAddress sets the address for the Courier service to be found on
+func ListensOnAddress(address string) CourierOption {
+	return func(c *Courier) {
+		c.Address = address
+	}
+}
+
+// ListensOnPort sets the port for the Courier service to serve on
+func ListensOnPort(port string) CourierOption {
+	return func(c *Courier) {
+		c.Port = port
+	}
+}
+
+// WithDialOption adds an option to be passed to the MessageClient when connecting to other services
+func WithDialOption(option grpc.DialOption) CourierOption {
+	return func(c *Courier) {
+		c.grpcOptions = append(c.grpcOptions, option)
+	}
+}
+
+// WithClientMessageContext sets the context for connecting to other Courier services.  A timeout can potentially be added here
+func WithClientMessageContext(ctx context.Context) CourierOption {
+	return func(c *Courier) {
+		c.clientContext = ctx
+	}
+}
+
+// WithNodeStoreInterval sets the interval that the observer waits before attempting to refresh the current nodes in the Courier system
+func WithNodeStoreInterval(interval time.Duration) CourierOption {
+	return func(c *Courier) {
+		c.observeInterval = interval
+	}
 }
 
 // Courier is a messaging and node discovery service
@@ -31,54 +74,59 @@ type Courier struct {
 	SubscribedSubjects  []string
 	Address             string
 	Port                string
-	messageServer       *server.MessageServer
+	observeInterval     time.Duration
+	grpcOptions         []grpc.DialOption
+	clientContext       context.Context
 	messageProxy        *proxy.MessageProxy
-	storeObserver       *observer.StoreObserver
+	messageClient       *client.MessageClient
 }
 
 // NewCourier creates a new Courier service
-func NewCourier(options CourierOptions) (*Courier, error) {
-	if options.NodeStore == nil {
-		return nil, errors.New("must have a NodeStore set in order to instantiate courier service")
-	}
-	if options.Address == "" {
-		return nil, errors.New("must have an Address set in order to instantiate courier service")
-	}
-	if options.Port == "" {
-		return nil, errors.New("must have a Port set in order to instantiate courier service")
+func NewCourier(store observer.NodeStorer, options ...CourierOption) *Courier {
+	c := &Courier{
+		Address:             localIp(),
+		Port:                "8080",
+		BroadcastedSubjects: []string{},
+		SubscribedSubjects:  []string{},
+		observeInterval:     time.Second * 3,
+		grpcOptions:         []grpc.DialOption{},
+		clientContext:       context.Background(),
 	}
 
-	push := make(chan message.Message)
-	info := make(chan node.ResponseInfo)
-	pquit := make(chan bool)
+	for _, option := range options {
+		option(c)
+	}
 
-	mserver := server.NewMessageServer(push, info)
-	err := startMessageServer(mserver, options.Port)
+	s := server.NewMessageServer()
+	c.messageProxy = proxy.NewMessageProxy(s.PushChannel())
+	o := observer.NewStoreObserver(store, c.observeInterval, c.BroadcastedSubjects)
+	c.messageClient = client.NewMessageClient(s.ResponseChannel(), o.ListenChannel(), c.clientContext, c.Address, c.Port, c.grpcOptions)
+	go startMessageServer(s, c.Port)
+
+	return c
+}
+
+// Subscribe takes a subject and returns a channel that will receive messages that are sent on that channel
+func (c *Courier) Subscribe(subject string) chan message.Message {
+	return c.messageProxy.Subscribe(subject)
+}
+
+// PushChannel returns a channel that will take a message and send it to all services that are subscribed to it
+func (c *Courier) PushChannel(subject string) chan message.Message {
+	return c.messageClient.PushChannel()
+}
+
+// localIP returns the ip address this node is currently using
+func localIp() string {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
-		return nil, fmt.Errorf("could not start message server: %s", err)
+		log.Fatal(err)
 	}
-	prox := proxy.NewMessageProxy(push, pquit)
+	defer conn.Close()
 
-	c := Courier{
-		BroadcastedSubjects: options.BroadcastedSubjects,
-		SubscribedSubjects:  options.SubscribedSubjects,
-		Address:             options.Address,
-		Port:                options.Port,
-		messageServer:       mserver,
-		messageProxy:        prox,
-	}
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
 
-	if len(options.BroadcastedSubjects) != 0 {
-		if options.ObserveInterval == 0 {
-			return nil, errors.New("cannot have a time interval that is unset or equal to 0")
-		}
-
-		c.storeObserver = observer.NewStoreObserver(options.NodeStore, options.ObserveInterval, options.BroadcastedSubjects)
-		// clientChannel := c.storeObserver.listenChannel()
-		c.storeObserver.Start()
-	}
-
-	return &c, nil
+	return localAddr.IP.String()
 }
 
 // startMessageServer starts the message server on a given port

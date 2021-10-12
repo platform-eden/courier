@@ -9,14 +9,12 @@ import (
 
 type MessageProxy struct {
 	PushChannel   chan message.Message
-	QuitChannel   chan bool
 	Subscriptions map[string][]chan (message.Message)
 }
 
-func NewMessageProxy(push chan message.Message, quit chan bool) *MessageProxy {
+func NewMessageProxy(push chan message.Message) *MessageProxy {
 	mp := MessageProxy{
 		PushChannel:   push,
-		QuitChannel:   quit,
 		Subscriptions: map[string][]chan (message.Message){},
 	}
 
@@ -42,16 +40,10 @@ func (mp *MessageProxy) Subscribe(subject string) chan message.Message {
 }
 
 func (mp *MessageProxy) start() {
-proxy:
-	for {
-		select {
-		case m := <-mp.PushChannel:
-			err := send(m, mp.Subscriptions)
-			if err != nil {
-				log.Printf("%v New subscriber for subject: %s\n", time.Now().Format(time.RFC3339), m.Subject)
-			}
-		case <-mp.QuitChannel:
-			break proxy
+	for m := range mp.PushChannel {
+		err := send(m, mp.Subscriptions)
+		if err != nil {
+			log.Printf(err.Error())
 		}
 	}
 }
