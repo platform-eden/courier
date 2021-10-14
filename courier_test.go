@@ -18,6 +18,7 @@ func TestNewCourier(t *testing.T) {
 
 	store := mock.NewMockNodeStore(nodes...)
 	NewCourier(store,
+		WithId("test"),
 		Subscribes(sub...),
 		Broadcasts(broad...),
 		ListensOnAddress("test.com"),

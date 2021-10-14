@@ -143,7 +143,7 @@ func TestMessageClient_ListenForOutgoingMessages(t *testing.T) {
 		SubscribedSubjects:  subjects,
 		BroadcastedSubjects: []string{"broad1", "broad2", "broad3"},
 	})[0]
-	n.IpAddress = "bufnet"
+	n.Address = "bufnet"
 	n.Port = ""
 	options := []grpc.DialOption{
 		grpc.WithInsecure(),

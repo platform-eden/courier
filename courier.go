@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"time"
 
 	"github.com/platform-edn/courier/client"
 	"github.com/platform-edn/courier/message"
+	"github.com/platform-edn/courier/node"
 	"github.com/platform-edn/courier/observer"
 	"github.com/platform-edn/courier/proto"
 	"github.com/platform-edn/courier/proxy"
@@ -19,31 +21,38 @@ import (
 // CourierOption is a set of options that may be passed as parameters when creating a Courier object
 type CourierOption func(c *Courier)
 
+// WithId sets the Id that this Courier service will use to be unique within the Courier system
+func WithId(id string) CourierOption {
+	return func(c *Courier) {
+		c.Node.Id = id
+	}
+}
+
 // Subscribes sets the subjects the Courier services will listen for
 func Subscribes(subjects ...string) CourierOption {
 	return func(c *Courier) {
-		c.SubscribedSubjects = subjects
+		c.Node.SubscribedSubjects = subjects
 	}
 }
 
 // Broadcasts sets the subjects Courier services will produce on
 func Broadcasts(subjects ...string) CourierOption {
 	return func(c *Courier) {
-		c.BroadcastedSubjects = subjects
+		c.Node.BroadcastedSubjects = subjects
 	}
 }
 
 // ListensOnAddress sets the address for the Courier service to be found on
 func ListensOnAddress(address string) CourierOption {
 	return func(c *Courier) {
-		c.Address = address
+		c.Node.Address = address
 	}
 }
 
 // ListensOnPort sets the port for the Courier service to serve on
 func ListensOnPort(port string) CourierOption {
 	return func(c *Courier) {
-		c.Port = port
+		c.Node.Port = port
 	}
 }
 
@@ -70,40 +79,50 @@ func WithNodeStoreInterval(interval time.Duration) CourierOption {
 
 // Courier is a messaging and node discovery service
 type Courier struct {
-	BroadcastedSubjects []string
-	SubscribedSubjects  []string
-	Address             string
-	Port                string
-	observeInterval     time.Duration
-	grpcOptions         []grpc.DialOption
-	clientContext       context.Context
-	messageProxy        *proxy.MessageProxy
-	messageClient       *client.MessageClient
+	Node            *node.Node
+	observeInterval time.Duration
+	grpcOptions     []grpc.DialOption
+	clientContext   context.Context
+	messageProxy    *proxy.MessageProxy
+	messageClient   *client.MessageClient
 }
 
 // NewCourier creates a new Courier service
-func NewCourier(store observer.NodeStorer, options ...CourierOption) *Courier {
+func NewCourier(store observer.NodeStorer, options ...CourierOption) (*Courier, error) {
+	n := node.NewNode("", localIp(), "8080", []string{}, []string{})
+
 	c := &Courier{
-		Address:             localIp(),
-		Port:                "8080",
-		BroadcastedSubjects: []string{},
-		SubscribedSubjects:  []string{},
-		observeInterval:     time.Second * 3,
-		grpcOptions:         []grpc.DialOption{},
-		clientContext:       context.Background(),
+		Node:            n,
+		observeInterval: time.Second * 3,
+		grpcOptions:     []grpc.DialOption{},
+		clientContext:   context.Background(),
 	}
 
 	for _, option := range options {
 		option(c)
 	}
 
+	if c.Node.Id == "" {
+		hostname, err := hostname()
+		if err != nil {
+			return nil, fmt.Errorf("could not set hostname for Courier: %s", err)
+		}
+
+		c.Node.Id = hostname
+	}
+
 	s := server.NewMessageServer()
 	c.messageProxy = proxy.NewMessageProxy(s.PushChannel())
-	o := observer.NewStoreObserver(store, c.observeInterval, c.BroadcastedSubjects)
-	c.messageClient = client.NewMessageClient(s.ResponseChannel(), o.ListenChannel(), c.clientContext, c.Address, c.Port, c.grpcOptions)
-	go startMessageServer(s, c.Port)
+	o := observer.NewStoreObserver(store, c.observeInterval, c.Node.BroadcastedSubjects)
+	c.messageClient = client.NewMessageClient(s.ResponseChannel(), o.ListenChannel(), c.clientContext, c.Node.Address, c.Node.Port, c.grpcOptions)
+	go startMessageServer(s, c.Node.Port)
 
-	return c
+	err := store.AddNode(c.Node)
+	if err != nil {
+		return nil, fmt.Errorf("could not add Node to NodeStore: %s", err)
+	}
+
+	return c, nil
 }
 
 // Subscribe takes a subject and returns a channel that will receive messages that are sent on that channel
@@ -127,6 +146,15 @@ func localIp() string {
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 
 	return localAddr.IP.String()
+}
+
+func hostname() (string, error) {
+	name, err := os.Hostname()
+	if err != nil {
+		return "", fmt.Errorf("could not access get hostname from os: %s", err)
+	}
+
+	return name, nil
 }
 
 // startMessageServer starts the message server on a given port

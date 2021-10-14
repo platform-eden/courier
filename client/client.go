@@ -94,9 +94,9 @@ func sendPubMessage(m *message.Message, subs *subscriberMap, ctx context.Context
 
 	for _, n := range nodes {
 		go func(n *node.Node) {
-			client, conn, err := createGRPCClient(ctx, n.IpAddress, n.Port, options...)
+			client, conn, err := createGRPCClient(ctx, n.Address, n.Port, options...)
 			if err != nil {
-				log.Printf("failed creating grpc client for %s:%s : %s", n.IpAddress, n.Port, err)
+				log.Printf("failed creating grpc client for %s:%s : %s", n.Address, n.Port, err)
 				return
 			}
 			defer conn.Close()
@@ -109,7 +109,7 @@ func sendPubMessage(m *message.Message, subs *subscriberMap, ctx context.Context
 
 			_, err = client.PublishMessage(ctx, &proto.PublishMessageRequest{Message: &p})
 			if err != nil {
-				log.Printf("failed sending publish message to %s: %s", n.IpAddress, err)
+				log.Printf("failed sending publish message to %s: %s", n.Address, err)
 			}
 		}(n)
 	}
@@ -125,9 +125,9 @@ func sendReqMessage(m *message.Message, subs *subscriberMap, address string, por
 
 	for _, n := range nodes {
 		go func(n *node.Node) {
-			client, conn, err := createGRPCClient(ctx, n.IpAddress, n.Port, options...)
+			client, conn, err := createGRPCClient(ctx, n.Address, n.Port, options...)
 			if err != nil {
-				log.Printf("failed creating grpc client for %s:%s : %s", n.IpAddress, n.Port, err)
+				log.Printf("failed creating grpc client for %s:%s : %s", n.Address, n.Port, err)
 				return
 			}
 			defer conn.Close()
@@ -142,7 +142,7 @@ func sendReqMessage(m *message.Message, subs *subscriberMap, address string, por
 
 			_, err = client.RequestMessage(ctx, &proto.RequestMessageRequest{Message: &p})
 			if err != nil {
-				log.Printf("failed sending publish message to %s: %s", n.IpAddress, err)
+				log.Printf("failed sending publish message to %s: %s", n.Address, err)
 			}
 		}(n)
 	}
