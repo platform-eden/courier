@@ -114,7 +114,7 @@ func NewCourier(store observer.NodeStorer, options ...CourierOption) (*Courier, 
 	s := server.NewMessageServer()
 	c.messageProxy = proxy.NewMessageProxy(s.PushChannel())
 	o := observer.NewStoreObserver(store, c.observeInterval, c.Node.BroadcastedSubjects)
-	c.messageClient = client.NewMessageClient(s.ResponseChannel(), o.ListenChannel(), c.clientContext, c.Node.Address, c.Node.Port, c.grpcOptions)
+	c.messageClient = client.NewMessageClient(s.ResponseChannel(), o.NodeChannel(), o.FailedConnectionChannel(), c.clientContext, c.Node.Address, c.Node.Port, c.grpcOptions)
 	go startMessageServer(s, c.Node.Port)
 
 	err := store.AddNode(c.Node)

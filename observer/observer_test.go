@@ -18,7 +18,7 @@ func TestStoreObserver_Start(t *testing.T) {
 	store := mock.NewMockNodeStore(nodes...)
 	observer := NewStoreObserver(store, (time.Second * 1), subjects)
 
-	nodeChannel := observer.ListenChannel()
+	nodeChannel := observer.NodeChannel()
 
 	timer := time.NewTimer(time.Second * 3)
 

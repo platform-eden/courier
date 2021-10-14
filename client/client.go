@@ -12,26 +12,28 @@ import (
 )
 
 type MessageClient struct {
-	responseMap   *responseMap
-	subscriberMap *subscriberMap
-	infoChannel   chan node.ResponseInfo
-	pushChannel   chan message.Message
-	nodeChannel   chan map[string]node.Node
-	gRPCContext   context.Context
-	LocalAddress  string
-	LocalPort     string
-	options       []grpc.DialOption
+	responseMap       *responseMap
+	subscriberMap     *subscriberMap
+	infoChannel       chan node.ResponseInfo
+	pushChannel       chan message.Message
+	nodeChannel       chan map[string]node.Node
+	failedConnChannel chan node.Node
+	gRPCContext       context.Context
+	LocalAddress      string
+	LocalPort         string
+	options           []grpc.DialOption
 }
 
-func NewMessageClient(info chan node.ResponseInfo, node chan map[string]node.Node, ctx context.Context, localAddress string, localPort string, options []grpc.DialOption) *MessageClient {
+func NewMessageClient(info chan node.ResponseInfo, node chan map[string]node.Node, fcchan chan node.Node, ctx context.Context, localAddress string, localPort string, options []grpc.DialOption) *MessageClient {
 	c := MessageClient{
-		responseMap:   newResponseMap(),
-		subscriberMap: newSubscriberMap(),
-		infoChannel:   info,
-		pushChannel:   make(chan message.Message),
-		nodeChannel:   node,
-		gRPCContext:   ctx,
-		options:       options,
+		responseMap:       newResponseMap(),
+		subscriberMap:     newSubscriberMap(),
+		infoChannel:       info,
+		pushChannel:       make(chan message.Message),
+		nodeChannel:       node,
+		failedConnChannel: fcchan,
+		gRPCContext:       ctx,
+		options:           options,
 	}
 
 	go c.listenForResponseInfo()

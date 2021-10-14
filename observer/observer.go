@@ -9,30 +9,34 @@ import (
 )
 
 type StoreObserver struct {
-	store           NodeStorer
-	observeInterval time.Duration
-	currentNodes    map[string]node.Node
-	nodeChannels    []chan (map[string]node.Node)
-	subjects        []string
-	lock            lock.Locker
+	store             NodeStorer
+	observeInterval   time.Duration
+	currentNodes      map[string]node.Node
+	blackListedNodes  map[string]node.Node
+	nodeChannels      []chan (map[string]node.Node)
+	failedConnections chan node.Node
+	subjects          []string
+	lock              lock.Locker
 }
 
 // Returns a paused StoreObserver
 func NewStoreObserver(store NodeStorer, interval time.Duration, subjects []string) *StoreObserver {
 	s := StoreObserver{
-		store:           store,
-		observeInterval: interval,
-		currentNodes:    map[string]node.Node{},
-		nodeChannels:    []chan (map[string]node.Node){},
-		subjects:        subjects,
-		lock:            lock.NewTicketLock(),
+		store:             store,
+		observeInterval:   interval,
+		currentNodes:      map[string]node.Node{},
+		blackListedNodes:  map[string]node.Node{},
+		nodeChannels:      []chan (map[string]node.Node){},
+		failedConnections: make(chan node.Node),
+		subjects:          subjects,
+		lock:              lock.NewTicketLock(),
 	}
 	s.observe()
 	return &s
 }
 
-// Adds a channel to the StoreObserver that will receive a map of Nodes when the NodeStore has updated Nodes and returns it
-func (s *StoreObserver) ListenChannel() chan (map[string]node.Node) {
+// NodeChannel adds a channel to the StoreObserver that will receive a map of Nodes when the NodeStore has updated Nodes and returns it
+func (s *StoreObserver) NodeChannel() chan (map[string]node.Node) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -40,6 +44,10 @@ func (s *StoreObserver) ListenChannel() chan (map[string]node.Node) {
 	s.nodeChannels = append(s.nodeChannels, channel)
 
 	return channel
+}
+
+func (s *StoreObserver) FailedConnectionChannel() chan node.Node {
+	return s.failedConnections
 }
 
 // Starts a Goroutine that will begin comparing current nodes and what nodes the NodeStore has.  If the NodeStore updates,
