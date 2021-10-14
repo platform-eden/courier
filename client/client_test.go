@@ -18,11 +18,13 @@ func TestMessageClient_PushChannel(t *testing.T) {
 	defer close(ichan)
 	nchan := make(chan map[string]node.Node)
 	defer close(nchan)
+	fcchan := make(chan node.Node)
+	defer close(fcchan)
 	ctx := context.Background()
 	address := "test.com"
 	port := "80"
 
-	client := NewMessageClient(ichan, nchan, ctx, address, port, []grpc.DialOption{})
+	client := NewMessageClient(ichan, nchan, fcchan, ctx, address, port, []grpc.DialOption{})
 	pchan := client.pushChannel
 
 	if client.pushChannel != pchan {
@@ -35,10 +37,12 @@ func TestMessageClient_ListenForResponseInfo(t *testing.T) {
 	defer close(ichan)
 	nchan := make(chan map[string]node.Node)
 	defer close(nchan)
+	fcchan := make(chan node.Node)
+	defer close(fcchan)
 	ctx := context.Background()
 	address := "test.com"
 	port := "80"
-	client := NewMessageClient(ichan, nchan, ctx, address, port, []grpc.DialOption{})
+	client := NewMessageClient(ichan, nchan, fcchan, ctx, address, port, []grpc.DialOption{})
 	id := uuid.NewString()
 
 	r := node.ResponseInfo{
@@ -75,10 +79,12 @@ func TestMessageClient_ListenForSubscribers(t *testing.T) {
 	defer close(ichan)
 	nchan := make(chan map[string]node.Node)
 	defer close(nchan)
+	fcchan := make(chan node.Node)
+	defer close(fcchan)
 	ctx := context.Background()
 	address := "test.com"
 	port := "80"
-	client := NewMessageClient(ichan, nchan, ctx, address, port, []grpc.DialOption{})
+	client := NewMessageClient(ichan, nchan, fcchan, ctx, address, port, []grpc.DialOption{})
 
 	nodecount := 10
 	subjects := []string{"sub1"}
@@ -134,6 +140,8 @@ func TestMessageClient_ListenForOutgoingMessages(t *testing.T) {
 	defer close(ichan)
 	nchan := make(chan map[string]node.Node)
 	defer close(nchan)
+	fcchan := make(chan node.Node)
+	defer close(fcchan)
 	ctx := context.Background()
 	address := "test.com"
 	port := "80"
@@ -149,7 +157,7 @@ func TestMessageClient_ListenForOutgoingMessages(t *testing.T) {
 		grpc.WithInsecure(),
 		grpc.WithContextDialer(s.BufDialer),
 	}
-	client := NewMessageClient(ichan, nchan, ctx, address, port, options)
+	client := NewMessageClient(ichan, nchan, fcchan, ctx, address, port, options)
 	pchan := client.pushChannel
 
 	client.subscriberMap.AddSubscriber(*n)
