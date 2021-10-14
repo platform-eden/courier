@@ -24,7 +24,14 @@ func TestMessageClient_PushChannel(t *testing.T) {
 	address := "test.com"
 	port := "80"
 
-	client := NewMessageClient(ichan, nchan, fcchan, ctx, address, port, []grpc.DialOption{})
+	client := NewMessageClient(
+		ichan,
+		nchan,
+		fcchan,
+		WithContext(ctx),
+		WithAddress(address),
+		WithPort(port),
+	)
 	pchan := client.pushChannel
 
 	if client.pushChannel != pchan {
@@ -42,7 +49,14 @@ func TestMessageClient_ListenForResponseInfo(t *testing.T) {
 	ctx := context.Background()
 	address := "test.com"
 	port := "80"
-	client := NewMessageClient(ichan, nchan, fcchan, ctx, address, port, []grpc.DialOption{})
+	client := NewMessageClient(
+		ichan,
+		nchan,
+		fcchan,
+		WithContext(ctx),
+		WithAddress(address),
+		WithPort(port),
+	)
 	id := uuid.NewString()
 
 	r := node.ResponseInfo{
@@ -84,7 +98,14 @@ func TestMessageClient_ListenForSubscribers(t *testing.T) {
 	ctx := context.Background()
 	address := "test.com"
 	port := "80"
-	client := NewMessageClient(ichan, nchan, fcchan, ctx, address, port, []grpc.DialOption{})
+	client := NewMessageClient(
+		ichan,
+		nchan,
+		fcchan,
+		WithContext(ctx),
+		WithAddress(address),
+		WithPort(port),
+	)
 
 	nodecount := 10
 	subjects := []string{"sub1"}
@@ -157,7 +178,15 @@ func TestMessageClient_ListenForOutgoingMessages(t *testing.T) {
 		grpc.WithInsecure(),
 		grpc.WithContextDialer(s.BufDialer),
 	}
-	client := NewMessageClient(ichan, nchan, fcchan, ctx, address, port, options)
+	client := NewMessageClient(
+		ichan,
+		nchan,
+		fcchan,
+		WithContext(ctx),
+		WithAddress(address),
+		WithPort(port),
+		WithDialOption(options...),
+	)
 	pchan := client.pushChannel
 
 	client.subscriberMap.AddSubscriber(*n)

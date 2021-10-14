@@ -56,17 +56,31 @@ func ListensOnPort(port string) CourierOption {
 	}
 }
 
-// WithDialOption adds an option to be passed to the MessageClient when connecting to other services
-func WithDialOption(option grpc.DialOption) CourierOption {
+// WithClientContext sets the context for gRPC connections in the client
+func WithClientContext(ctx context.Context) CourierOption {
 	return func(c *Courier) {
-		c.grpcOptions = append(c.grpcOptions, option)
+		c.clientOptions = append(c.clientOptions, client.WithContext(ctx))
 	}
 }
 
-// WithClientMessageContext sets the context for connecting to other Courier services.  A timeout can potentially be added here
-func WithClientMessageContext(ctx context.Context) CourierOption {
+// WithDialOption sets the dial options for gRPC connections in the client
+func WithDialOption(option ...grpc.DialOption) CourierOption {
 	return func(c *Courier) {
-		c.clientContext = ctx
+		c.clientOptions = append(c.clientOptions, client.WithDialOption(option...))
+	}
+}
+
+// WithFailedMessageWaitInterval sets the time in between attempts to send a message
+func WithFailedMessageWaitInterval(interval time.Duration) CourierOption {
+	return func(c *Courier) {
+		c.clientOptions = append(c.clientOptions, client.WithFailedWaitInterval(interval))
+	}
+}
+
+// WithMaxFailedMessageAttempts sets the max amount of attempts to send a message before blacklisting a node
+func WithMaxFailedMessageAttempts(attempts int) CourierOption {
+	return func(c *Courier) {
+		c.clientOptions = append(c.clientOptions, client.WithMaxFailedAttempts(attempts))
 	}
 }
 
@@ -81,8 +95,7 @@ func WithNodeStoreInterval(interval time.Duration) CourierOption {
 type Courier struct {
 	Node            *node.Node
 	observeInterval time.Duration
-	grpcOptions     []grpc.DialOption
-	clientContext   context.Context
+	clientOptions   []client.ClientOption
 	messageProxy    *proxy.MessageProxy
 	messageClient   *client.MessageClient
 }
@@ -94,8 +107,7 @@ func NewCourier(store observer.NodeStorer, options ...CourierOption) (*Courier, 
 	c := &Courier{
 		Node:            n,
 		observeInterval: time.Second * 3,
-		grpcOptions:     []grpc.DialOption{},
-		clientContext:   context.Background(),
+		clientOptions:   []client.ClientOption{},
 	}
 
 	for _, option := range options {
@@ -111,10 +123,12 @@ func NewCourier(store observer.NodeStorer, options ...CourierOption) (*Courier, 
 		c.Node.Id = hostname
 	}
 
+	c.clientOptions = append(c.clientOptions, client.WithAddress(c.Node.Address), client.WithPort(c.Node.Port))
+
 	s := server.NewMessageServer()
 	c.messageProxy = proxy.NewMessageProxy(s.PushChannel())
 	o := observer.NewStoreObserver(store, c.observeInterval, c.Node.BroadcastedSubjects)
-	c.messageClient = client.NewMessageClient(s.ResponseChannel(), o.NodeChannel(), o.FailedConnectionChannel(), c.clientContext, c.Node.Address, c.Node.Port, c.grpcOptions)
+	c.messageClient = client.NewMessageClient(s.ResponseChannel(), o.NodeChannel(), o.FailedConnectionChannel(), c.clientOptions...)
 	go startMessageServer(s, c.Node.Port)
 
 	err := store.AddNode(c.Node)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/platform-edn/courier/message"
 	"github.com/platform-edn/courier/node"
@@ -11,36 +12,82 @@ import (
 	"google.golang.org/grpc"
 )
 
-type MessageClient struct {
-	responseMap       *responseMap
-	subscriberMap     *subscriberMap
-	infoChannel       chan node.ResponseInfo
-	pushChannel       chan message.Message
-	nodeChannel       chan map[string]node.Node
-	failedConnChannel chan node.Node
-	gRPCContext       context.Context
-	LocalAddress      string
-	LocalPort         string
-	options           []grpc.DialOption
+type ClientOption func(m *MessageClient)
+
+func WithDialOption(option ...grpc.DialOption) ClientOption {
+	return func(m *MessageClient) {
+		m.dialOptions = append(m.dialOptions, option...)
+	}
 }
 
-func NewMessageClient(info chan node.ResponseInfo, node chan map[string]node.Node, fcchan chan node.Node, ctx context.Context, localAddress string, localPort string, options []grpc.DialOption) *MessageClient {
-	c := MessageClient{
-		responseMap:       newResponseMap(),
-		subscriberMap:     newSubscriberMap(),
-		infoChannel:       info,
-		pushChannel:       make(chan message.Message),
-		nodeChannel:       node,
-		failedConnChannel: fcchan,
-		gRPCContext:       ctx,
-		options:           options,
+func WithContext(ctx context.Context) ClientOption {
+	return func(m *MessageClient) {
+		m.gRPCContext = ctx
+	}
+}
+
+func WithAddress(address string) ClientOption {
+	return func(m *MessageClient) {
+		m.Address = address
+	}
+}
+
+func WithPort(port string) ClientOption {
+	return func(m *MessageClient) {
+		m.Port = port
+	}
+}
+
+func WithFailedWaitInterval(interval time.Duration) ClientOption {
+	return func(m *MessageClient) {
+		m.failedWaitInterval = interval
+	}
+}
+
+func WithMaxFailedAttempts(attempts int) ClientOption {
+	return func(m *MessageClient) {
+		m.maxFailedAttempts = attempts
+	}
+}
+
+type MessageClient struct {
+	responseMap        *responseMap
+	subscriberMap      *subscriberMap
+	infoChannel        chan node.ResponseInfo
+	pushChannel        chan message.Message
+	nodeChannel        chan map[string]node.Node
+	failedConnChannel  chan node.Node
+	failedWaitInterval time.Duration
+	maxFailedAttempts  int
+	gRPCContext        context.Context
+	Address            string
+	Port               string
+	dialOptions        []grpc.DialOption
+}
+
+func NewMessageClient(info chan node.ResponseInfo, node chan map[string]node.Node, fcchan chan node.Node, options ...ClientOption) *MessageClient {
+	c := &MessageClient{
+		responseMap:        newResponseMap(),
+		subscriberMap:      newSubscriberMap(),
+		infoChannel:        info,
+		pushChannel:        make(chan message.Message),
+		nodeChannel:        node,
+		failedConnChannel:  fcchan,
+		gRPCContext:        context.Background(),
+		dialOptions:        []grpc.DialOption{},
+		failedWaitInterval: time.Second * 3,
+		maxFailedAttempts:  5,
+	}
+
+	for _, option := range options {
+		option(c)
 	}
 
 	go c.listenForResponseInfo()
 	go c.listenForSubscribers()
 	go c.listenForOutgoingMessages()
 
-	return &c
+	return c
 }
 
 func (c *MessageClient) PushChannel() chan message.Message {
@@ -69,17 +116,17 @@ func (c *MessageClient) listenForOutgoingMessages() {
 			var err error
 			switch m.Type {
 			case message.PubMessage:
-				err = sendPubMessage(&m, c.subscriberMap, c.gRPCContext, c.options)
+				err = sendPubMessage(&m, c.subscriberMap, c.gRPCContext, c.dialOptions)
 				if err != nil {
 					log.Printf("failed sending PubMessage: %s", err)
 				}
 			case message.RespMessage:
-				err = sendRespMessage(&m, c.responseMap, c.gRPCContext, c.options)
+				err = sendRespMessage(&m, c.responseMap, c.gRPCContext, c.dialOptions)
 				if err != nil {
 					log.Printf("failed sending RespMessage: %s", err)
 				}
 			case message.ReqMessage:
-				err = sendReqMessage(&m, c.subscriberMap, c.LocalAddress, c.LocalPort, c.gRPCContext, c.options)
+				err = sendReqMessage(&m, c.subscriberMap, c.Address, c.Port, c.gRPCContext, c.dialOptions)
 				if err != nil {
 					log.Printf("failed sending ReqMessage: %s", err)
 				}
@@ -181,7 +228,7 @@ func createGRPCClient(ctx context.Context, address string, port string, options 
 
 	conn, err := grpc.DialContext(ctx, fmt.Sprintf("%s:%s", address, port), options...)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to dial bufnet: %v", err)
+		return nil, nil, fmt.Errorf("failed to dial %s: %v", fmt.Sprintf("%s:%s", address, port), err)
 	}
 
 	client := proto.NewMessageServerClient(conn)

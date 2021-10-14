@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/platform-edn/courier/mock"
+	"google.golang.org/grpc"
 )
 
 func TestNewCourier(t *testing.T) {
@@ -23,6 +24,7 @@ func TestNewCourier(t *testing.T) {
 		Broadcasts(broad...),
 		ListensOnAddress("test.com"),
 		ListensOnPort("3000"),
-		WithClientMessageContext(context.Background()),
+		WithClientContext(context.Background()),
+		WithDialOption(grpc.WithInsecure()),
 	)
 }
