@@ -69,7 +69,6 @@ type MessageClient struct {
 	failedWaitInterval time.Duration
 	maxFailedAttempts  int
 	gRPCContext        context.Context
-	id                 string
 	dialOptions        []grpc.DialOption
 }
 
@@ -160,6 +159,10 @@ func (c *MessageClient) listenForOutgoingMessages() {
 	}
 }
 
+// attemptMessage attempts to invoke a Sender's Send method.  If no errors are returned, this method exits.
+// If errors are returned, attemptMessage will wait a disignated amount of time before attempting to send again.
+// This method will keep attempting to send a message until the max amount of attempts are reached, then it will remove
+// the receiver node from the subscriberMap and send the node to anyone listening on the failedConnChannel
 func (c *MessageClient) attemptMessage(m message.Message, receiver *node.Node, sender Sender) {
 	attempt := 0
 	for {
@@ -175,8 +178,9 @@ func (c *MessageClient) attemptMessage(m message.Message, receiver *node.Node, s
 		conn.Close()
 		if attempt >= c.maxFailedAttempts {
 			log.Printf("failed creating connection to %s:%s: %s\n", receiver.Address, receiver.Port, err)
-			log.Printf("will now be blacklisting %s\n", receiver.Id)
+			log.Printf("will now be removing and blacklisting %s\n", receiver.Id)
 
+			c.subscriberMap.RemoveSubscriber(receiver)
 			c.failedConnChannel <- *receiver
 			break
 		}
@@ -187,6 +191,7 @@ func (c *MessageClient) attemptMessage(m message.Message, receiver *node.Node, s
 	}
 }
 
+// createGRPCClient takes an address, port, and dialOptions and returns a client connection
 func createGRPCClient(address string, port string, options ...grpc.DialOption) (proto.MessageServerClient, *grpc.ClientConn, error) {
 	conn, err := grpc.Dial(fmt.Sprintf("%s:%s", address, port), options...)
 	if err != nil {
