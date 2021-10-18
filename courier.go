@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/platform-edn/courier/client"
 	"github.com/platform-edn/courier/message"
 	"github.com/platform-edn/courier/node"
@@ -115,20 +116,19 @@ func NewCourier(store observer.NodeStorer, options ...CourierOption) (*Courier, 
 	}
 
 	if c.Node.Id == "" {
-		hostname, err := hostname()
-		if err != nil {
-			return nil, fmt.Errorf("could not set hostname for Courier: %s", err)
-		}
+		// hostname, err := hostname()
+		// if err != nil {
+		// 	return nil, fmt.Errorf("could not set hostname for Courier: %s", err)
+		// }
 
-		c.Node.Id = hostname
+		// c.Node.Id = hostname
+		c.Node.Id = uuid.NewString()
 	}
-
-	c.clientOptions = append(c.clientOptions, client.WithAddress(c.Node.Address), client.WithPort(c.Node.Port))
 
 	s := server.NewMessageServer()
 	c.messageProxy = proxy.NewMessageProxy(s.PushChannel())
 	o := observer.NewStoreObserver(store, c.observeInterval, c.Node.BroadcastedSubjects)
-	c.messageClient = client.NewMessageClient(s.ResponseChannel(), o.NodeChannel(), o.FailedConnectionChannel(), c.clientOptions...)
+	c.messageClient = client.NewMessageClient(c.Node.Id, s.ResponseChannel(), o.NodeChannel(), o.FailedConnectionChannel(), c.clientOptions...)
 	go startMessageServer(s, c.Node.Port)
 
 	err := store.AddNode(c.Node)

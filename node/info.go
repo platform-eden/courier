@@ -1,8 +1,7 @@
 package node
 
-// ReponseInfo holds base contact information for a node that may not be stored inside the courier service
+// ReponseInfo connects a message id to a node id
 type ResponseInfo struct {
-	Id      string
-	Address string
-	Port    string
+	MessageId string
+	NodeId    string
 }

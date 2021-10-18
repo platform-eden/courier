@@ -73,9 +73,8 @@ func (m *MockServer) RequestMessage(ctx context.Context, request *proto.RequestM
 
 	req := message.NewReqMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
 	info := node.ResponseInfo{
-		Id:      request.Message.Id,
-		Address: request.Message.ReturnAddress,
-		Port:    request.Message.ReturnPort,
+		MessageId: request.Message.Id,
+		NodeId:    request.Message.NodeId,
 	}
 
 	m.Messages = append(m.Messages, &req)

@@ -10,7 +10,6 @@ import (
 	"github.com/platform-edn/courier/mock"
 	"github.com/platform-edn/courier/node"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/test/bufconn"
 )
 
 func TestMessageClient_PushChannel(t *testing.T) {
@@ -21,16 +20,14 @@ func TestMessageClient_PushChannel(t *testing.T) {
 	fcchan := make(chan node.Node)
 	defer close(fcchan)
 	ctx := context.Background()
-	address := "test.com"
-	port := "80"
+	id := uuid.NewString()
 
 	client := NewMessageClient(
+		id,
 		ichan,
 		nchan,
 		fcchan,
 		WithContext(ctx),
-		WithAddress(address),
-		WithPort(port),
 	)
 	pchan := client.pushChannel
 
@@ -47,22 +44,21 @@ func TestMessageClient_ListenForResponseInfo(t *testing.T) {
 	fcchan := make(chan node.Node)
 	defer close(fcchan)
 	ctx := context.Background()
-	address := "test.com"
-	port := "80"
+	id := uuid.NewString()
+
 	client := NewMessageClient(
+		id,
 		ichan,
 		nchan,
 		fcchan,
 		WithContext(ctx),
-		WithAddress(address),
-		WithPort(port),
 	)
-	id := uuid.NewString()
+	mid := uuid.NewString()
+	nid := uuid.NewString()
 
 	r := node.ResponseInfo{
-		Id:      id,
-		Address: "test.com",
-		Port:    "80",
+		MessageId: mid,
+		NodeId:    nid,
 	}
 
 	ichan <- r
@@ -70,7 +66,7 @@ func TestMessageClient_ListenForResponseInfo(t *testing.T) {
 
 	go func() {
 		for {
-			_, err := client.responseMap.PopResponse(id)
+			_, err := client.responseMap.PopResponse(mid)
 			if err != nil {
 				time.Sleep(time.Second / 4)
 				continue
@@ -96,15 +92,14 @@ func TestMessageClient_ListenForSubscribers(t *testing.T) {
 	fcchan := make(chan node.Node)
 	defer close(fcchan)
 	ctx := context.Background()
-	address := "test.com"
-	port := "80"
+	id := uuid.NewString()
+
 	client := NewMessageClient(
+		id,
 		ichan,
 		nchan,
 		fcchan,
 		WithContext(ctx),
-		WithAddress(address),
-		WithPort(port),
 	)
 
 	nodecount := 10
@@ -155,74 +150,135 @@ func TestMessageClient_ListenForSubscribers(t *testing.T) {
 }
 
 func TestMessageClient_ListenForOutgoingMessages(t *testing.T) {
-	lis := bufconn.Listen(1024 * 1024)
-	s := mock.NewMockServer(lis)
 	ichan := make(chan node.ResponseInfo)
 	defer close(ichan)
 	nchan := make(chan map[string]node.Node)
 	defer close(nchan)
 	fcchan := make(chan node.Node)
 	defer close(fcchan)
+	id := uuid.NewString()
 	ctx := context.Background()
-	address := "test.com"
-	port := "80"
+	pubs := mock.NewMockSender()
+	reqs := mock.NewMockSender()
+	resps := mock.NewMockSender()
+
+	c := NewMessageClient(
+		id,
+		ichan,
+		nchan,
+		fcchan,
+		WithContext(ctx),
+		WithDialOption(grpc.WithInsecure()),
+		WithFailedWaitInterval(time.Millisecond*300),
+		WithMaxFailedAttempts(3),
+		WithPublishSender(pubs),
+		WithRequestSender(reqs),
+		WithResponseSender(resps),
+	)
 
 	subjects := []string{"test"}
 	n := mock.CreateTestNodes(1, &mock.TestNodeOptions{
 		SubscribedSubjects:  subjects,
 		BroadcastedSubjects: []string{"broad1", "broad2", "broad3"},
 	})[0]
-	n.Address = "bufnet"
-	n.Port = ""
-	options := []grpc.DialOption{
-		grpc.WithInsecure(),
-		grpc.WithContextDialer(s.BufDialer),
+
+	r := node.ResponseInfo{
+		MessageId: uuid.NewString(),
+		NodeId:    n.Id,
 	}
-	client := NewMessageClient(
+
+	c.subscriberMap.AddSubscriber(*n)
+	c.responseMap.PushResponse(r)
+
+	push := c.PushChannel()
+
+	pubm := message.NewPubMessage(uuid.NewString(), "test", []byte("test"))
+	push <- pubm
+	reqm := message.NewReqMessage(uuid.NewString(), "test", []byte("test"))
+	push <- reqm
+	respm := message.NewRespMessage(r.MessageId, "test", []byte("test"))
+	push <- respm
+
+	time.Sleep(time.Second)
+
+	if pubs.Count(mock.Publish) != 1 {
+		t.Fatal("expected to have sent publish message but it didn't")
+	}
+	if reqs.Count(mock.Request) != 1 {
+		t.Fatal("expected to have sent request message but it didn't")
+	}
+	if resps.Count(mock.Response) != 1 {
+		t.Fatal("expected to have sent response message but it didn't")
+	}
+
+}
+
+func TestMessageClient_AttemptMessage(t *testing.T) {
+	ichan := make(chan node.ResponseInfo)
+	defer close(ichan)
+	nchan := make(chan map[string]node.Node)
+	defer close(nchan)
+	fcchan := make(chan node.Node)
+	defer close(fcchan)
+	id := uuid.NewString()
+	ctx := context.Background()
+
+	c := NewMessageClient(
+		id,
 		ichan,
 		nchan,
 		fcchan,
 		WithContext(ctx),
-		WithAddress(address),
-		WithPort(port),
-		WithDialOption(options...),
-	)
-	pchan := client.pushChannel
-
-	client.subscriberMap.AddSubscriber(*n)
-
+		WithDialOption(grpc.WithInsecure()),
+		WithFailedWaitInterval(time.Millisecond*300),
+		WithMaxFailedAttempts(3))
+	n := mock.CreateTestNodes(1, &mock.TestNodeOptions{})[0]
 	m := message.NewPubMessage(uuid.NewString(), "test", []byte("test"))
-	m1 := message.NewReqMessage(uuid.NewString(), "test", []byte("test"))
+	s := mock.NewMockSender()
 
-	rid := uuid.NewString()
-	m2 := message.NewRespMessage(rid, "test", []byte("test"))
+	go c.attemptMessage(m, n, s)
 
-	client.responseMap.PushResponse(node.ResponseInfo{
-		Id:      rid,
-		Address: "bufnet",
-		Port:    "",
-	})
-
-	pchan <- m
-	pchan <- m1
-	pchan <- m2
-
-	pass := make(chan bool)
-	defer close(pass)
-	go func() {
-		for {
-			if s.MessagesLength() == 3 {
-				pass <- true
-				break
+passloop:
+	for {
+		cycles := 0
+		select {
+		case <-c.failedConnChannel:
+			t.Fatalf("error attempting message when it should not have")
+		default:
+			if s.Length() != 1 {
+				if cycles > c.maxFailedAttempts {
+					t.Fatalf("message was never sent on sender")
+				}
+				cycles++
+				time.Sleep(c.failedWaitInterval)
+				continue
 			}
-			time.Sleep(time.Second / 4)
-		}
-	}()
 
-	select {
-	case <-pass:
-		break
-	case <-time.After(time.Second * 1):
-		t.Fatal("took to long to send messages")
+			break passloop
+		}
+	}
+
+	s.Fail = true
+	go c.attemptMessage(m, n, s)
+
+failloop:
+	for {
+		select {
+		case <-c.failedConnChannel:
+			break failloop
+		case <-time.After(time.Second):
+			t.Fatalf("never received failed node in expected time")
+		}
+	}
+}
+
+func TestCreateGRPCClient(t *testing.T) {
+	address := "test.com"
+	port := "8080"
+	options := []grpc.DialOption{grpc.WithInsecure()}
+
+	_, _, err := createGRPCClient(address, port, options...)
+	if err != nil {
+		t.Fatalf("error creating grpc client: %s", err)
 	}
 }

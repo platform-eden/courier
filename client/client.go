@@ -26,18 +26,6 @@ func WithContext(ctx context.Context) ClientOption {
 	}
 }
 
-func WithAddress(address string) ClientOption {
-	return func(m *MessageClient) {
-		m.Address = address
-	}
-}
-
-func WithPort(port string) ClientOption {
-	return func(m *MessageClient) {
-		m.Port = port
-	}
-}
-
 func WithFailedWaitInterval(interval time.Duration) ClientOption {
 	return func(m *MessageClient) {
 		m.failedWaitInterval = interval
@@ -50,6 +38,24 @@ func WithMaxFailedAttempts(attempts int) ClientOption {
 	}
 }
 
+func WithPublishSender(s Sender) ClientOption {
+	return func(m *MessageClient) {
+		m.publishSender = s
+	}
+}
+
+func WithRequestSender(s Sender) ClientOption {
+	return func(m *MessageClient) {
+		m.requestSender = s
+	}
+}
+
+func WithResponseSender(s Sender) ClientOption {
+	return func(m *MessageClient) {
+		m.responseSender = s
+	}
+}
+
 type MessageClient struct {
 	responseMap        *responseMap
 	subscriberMap      *subscriberMap
@@ -57,21 +63,26 @@ type MessageClient struct {
 	pushChannel        chan message.Message
 	nodeChannel        chan map[string]node.Node
 	failedConnChannel  chan node.Node
+	publishSender      Sender
+	requestSender      Sender
+	responseSender     Sender
 	failedWaitInterval time.Duration
 	maxFailedAttempts  int
 	gRPCContext        context.Context
-	Address            string
-	Port               string
+	id                 string
 	dialOptions        []grpc.DialOption
 }
 
-func NewMessageClient(info chan node.ResponseInfo, node chan map[string]node.Node, fcchan chan node.Node, options ...ClientOption) *MessageClient {
+func NewMessageClient(id string, info chan node.ResponseInfo, nchan chan map[string]node.Node, fcchan chan node.Node, options ...ClientOption) *MessageClient {
 	c := &MessageClient{
 		responseMap:        newResponseMap(),
 		subscriberMap:      newSubscriberMap(),
 		infoChannel:        info,
 		pushChannel:        make(chan message.Message),
-		nodeChannel:        node,
+		nodeChannel:        nchan,
+		publishSender:      &PublishClient{},
+		requestSender:      &RequestClient{NodeId: id},
+		responseSender:     &ResponseClient{},
 		failedConnChannel:  fcchan,
 		gRPCContext:        context.Background(),
 		dialOptions:        []grpc.DialOption{},
@@ -113,120 +124,71 @@ func (c *MessageClient) listenForSubscribers() {
 func (c *MessageClient) listenForOutgoingMessages() {
 	for m := range c.pushChannel {
 		go func(m message.Message) {
-			var err error
 			switch m.Type {
 			case message.PubMessage:
-				err = sendPubMessage(&m, c.subscriberMap, c.gRPCContext, c.dialOptions)
+				nodes, err := c.subscriberMap.SubjectSubscribers(m.Subject)
 				if err != nil {
-					log.Printf("failed sending PubMessage: %s", err)
+					log.Printf("could not get subject subscribers: %s", err)
 				}
-			case message.RespMessage:
-				err = sendRespMessage(&m, c.responseMap, c.gRPCContext, c.dialOptions)
-				if err != nil {
-					log.Printf("failed sending RespMessage: %s", err)
+
+				for _, n := range nodes {
+					go c.attemptMessage(m, n, c.publishSender)
 				}
 			case message.ReqMessage:
-				err = sendReqMessage(&m, c.subscriberMap, c.Address, c.Port, c.gRPCContext, c.dialOptions)
+				nodes, err := c.subscriberMap.SubjectSubscribers(m.Subject)
 				if err != nil {
-					log.Printf("failed sending ReqMessage: %s", err)
+					log.Printf("could not get subject subscribers: %s", err)
 				}
+
+				for _, n := range nodes {
+					go c.attemptMessage(m, n, c.requestSender)
+				}
+			case message.RespMessage:
+				id, err := c.responseMap.PopResponse(m.Id)
+				if err != nil {
+					log.Printf("could not get node id for message id %s: %s", m.Id, err)
+				}
+
+				n, err := c.subscriberMap.Subscriber(id)
+				if err != nil {
+					log.Printf("could node with id %s: %s", id, err)
+				}
+
+				go c.attemptMessage(m, n, c.responseSender)
 			}
 		}(m)
 	}
 }
 
-func sendPubMessage(m *message.Message, subs *subscriberMap, ctx context.Context, options []grpc.DialOption) error {
-	nodes, err := subs.SubjectSubscribers(m.Subject)
-	if err != nil {
-		return fmt.Errorf("could not get subject subscribers: %s", err)
+func (c *MessageClient) attemptMessage(m message.Message, receiver *node.Node, sender Sender) {
+	attempt := 0
+	for {
+		client, conn, err := createGRPCClient(receiver.Address, receiver.Port, c.dialOptions...)
+		if err == nil {
+			err = sender.Send(c.gRPCContext, m, client)
+			if err == nil {
+				conn.Close()
+				break
+			}
+		}
+
+		conn.Close()
+		if attempt >= c.maxFailedAttempts {
+			log.Printf("failed creating connection to %s:%s: %s\n", receiver.Address, receiver.Port, err)
+			log.Printf("will now be blacklisting %s\n", receiver.Id)
+
+			c.failedConnChannel <- *receiver
+			break
+		}
+
+		time.Sleep(c.failedWaitInterval)
+		attempt++
+		continue
 	}
-
-	for _, n := range nodes {
-		go func(n *node.Node) {
-			client, conn, err := createGRPCClient(ctx, n.Address, n.Port, options...)
-			if err != nil {
-				log.Printf("failed creating grpc client for %s:%s : %s", n.Address, n.Port, err)
-				return
-			}
-			defer conn.Close()
-
-			p := proto.PublishMessage{
-				Id:      m.Id,
-				Subject: m.Subject,
-				Content: m.Content,
-			}
-
-			_, err = client.PublishMessage(ctx, &proto.PublishMessageRequest{Message: &p})
-			if err != nil {
-				log.Printf("failed sending publish message to %s: %s", n.Address, err)
-			}
-		}(n)
-	}
-
-	return nil
 }
 
-func sendReqMessage(m *message.Message, subs *subscriberMap, address string, port string, ctx context.Context, options []grpc.DialOption) error {
-	nodes, err := subs.SubjectSubscribers(m.Subject)
-	if err != nil {
-		return fmt.Errorf("could not get subject subscribers: %s", err)
-	}
-
-	for _, n := range nodes {
-		go func(n *node.Node) {
-			client, conn, err := createGRPCClient(ctx, n.Address, n.Port, options...)
-			if err != nil {
-				log.Printf("failed creating grpc client for %s:%s : %s", n.Address, n.Port, err)
-				return
-			}
-			defer conn.Close()
-
-			p := proto.RequestMessage{
-				Id:            m.Id,
-				ReturnAddress: address,
-				ReturnPort:    port,
-				Subject:       m.Subject,
-				Content:       m.Content,
-			}
-
-			_, err = client.RequestMessage(ctx, &proto.RequestMessageRequest{Message: &p})
-			if err != nil {
-				log.Printf("failed sending publish message to %s: %s", n.Address, err)
-			}
-		}(n)
-	}
-
-	return nil
-}
-
-func sendRespMessage(m *message.Message, resps *responseMap, ctx context.Context, options []grpc.DialOption) error {
-	info, err := resps.PopResponse(m.Id)
-	if err != nil {
-		return fmt.Errorf("couldn't get pop response: %s", err)
-	}
-
-	client, conn, err := createGRPCClient(ctx, info.Address, info.Port, options...)
-	if err != nil {
-		return fmt.Errorf("failed creating grpc client for %s:%s : %s", info.Address, info.Port, err)
-	}
-	defer conn.Close()
-
-	resp := &proto.ResponseMessage{
-		Id:      m.Id,
-		Subject: m.Subject,
-		Content: m.Content,
-	}
-
-	_, err = client.ResponseMessage(ctx, &proto.ResponseMessageRequest{Message: resp})
-	if err != nil {
-		return fmt.Errorf("failed sending response to %s:%s : %s", info.Address, info.Port, err)
-	}
-	return nil
-}
-
-func createGRPCClient(ctx context.Context, address string, port string, options ...grpc.DialOption) (proto.MessageServerClient, *grpc.ClientConn, error) {
-
-	conn, err := grpc.DialContext(ctx, fmt.Sprintf("%s:%s", address, port), options...)
+func createGRPCClient(address string, port string, options ...grpc.DialOption) (proto.MessageServerClient, *grpc.ClientConn, error) {
+	conn, err := grpc.Dial(fmt.Sprintf("%s:%s", address, port), options...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to dial %s: %v", fmt.Sprintf("%s:%s", address, port), err)
 	}

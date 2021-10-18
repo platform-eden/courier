@@ -167,6 +167,51 @@ func TestSubscriberMap_GetAllSubscribers(t *testing.T) {
 	}
 }
 
+func TestSubscriberMap_Subscriber(t *testing.T) {
+	length := 5
+	subjects := []string{"sub", "sub1"}
+	nodes := mock.CreateTestNodes(length, &mock.TestNodeOptions{SubscribedSubjects: subjects})
+	nl := []node.Node{}
+
+	for _, n := range nodes {
+		nl = append(nl, *n)
+	}
+	subMap := newSubscriberMap()
+
+	for _, n := range nl {
+		subMap.AddSubscriber(n)
+	}
+
+	sub, err := subMap.Subscriber(nl[0].Id)
+	if err != nil {
+		t.Fatalf("error getting subscriber: %s", err)
+	}
+
+	if sub.Id != nl[0].Id {
+		t.Fatalf("expected subscriber to have id %s but got %s", nl[0].Id, sub.Id)
+	}
+
+	_, err = subMap.Subscriber("test")
+	if err == nil {
+		t.Fatal("expected subscriber to fail but it passed")
+	}
+}
+
+func TestSubscriberMap_Length(t *testing.T) {
+	n := mock.CreateTestNodes(1, &mock.TestNodeOptions{SubscribedSubjects: []string{"sub"}})[0]
+	n1 := mock.CreateTestNodes(1, &mock.TestNodeOptions{SubscribedSubjects: []string{"sub1"}})[0]
+
+	subMap := newSubscriberMap()
+
+	subMap.AddSubscriber(*n)
+	subMap.AddSubscriber(*n1)
+	l := subMap.Length()
+
+	if l != 2 {
+		t.Fatalf("expected submap length to be %v but got %v", 2, l)
+	}
+}
+
 func TestRemoveSubscriberFromSubject(t *testing.T) {
 	nodes := mock.CreateTestNodes(5, &mock.TestNodeOptions{})
 	np := rand.Intn(5)
