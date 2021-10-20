@@ -11,8 +11,8 @@ import (
 type StoreObserver struct {
 	store             NodeStorer
 	observeInterval   time.Duration
-	currentNodes      map[string]node.Node
-	blackListedNodes  map[string]node.Node
+	currentNodes      *NodeMap
+	blackListedNodes  *NodeMap
 	nodeChannels      []chan (map[string]node.Node)
 	failedConnections chan node.Node
 	subjects          []string
@@ -24,8 +24,8 @@ func NewStoreObserver(store NodeStorer, interval time.Duration, subjects []strin
 	s := StoreObserver{
 		store:             store,
 		observeInterval:   interval,
-		currentNodes:      map[string]node.Node{},
-		blackListedNodes:  map[string]node.Node{},
+		currentNodes:      NewNodeMap(),
+		blackListedNodes:  NewNodeMap(),
 		nodeChannels:      []chan (map[string]node.Node){},
 		failedConnections: make(chan node.Node),
 		subjects:          subjects,
@@ -55,48 +55,77 @@ func (s *StoreObserver) FailedConnectionChannel() chan node.Node {
 func (s *StoreObserver) observe() {
 	go func() {
 		for {
-			timer := time.NewTimer(s.observeInterval)
+			select {
+			case <-time.After(s.observeInterval):
+				s.attemptUpdatingNodes()
 
-			<-timer.C
-
-			nodes, err := s.store.GetSubscribers(s.subjects...)
-			if err != nil {
-				log.Printf("%s could not observe store nodes", time.Now().String())
-				continue
-			}
-
-			current, updated := compareNodes(nodes, s.currentNodes)
-
-			if updated {
-				s.currentNodes = current
-				s.lock.Lock()
-				for _, channel := range s.nodeChannels {
-					channel <- current
-				}
-				s.lock.Unlock()
+			case n := <-s.failedConnections:
+				s.blackListedNodes.AddNode(n)
+				s.currentNodes.RemoveNode(n.Id)
 			}
 		}
 	}()
 }
 
+func (s *StoreObserver) attemptUpdatingNodes() {
+	nodes, err := s.store.GetSubscribers(s.subjects...)
+	if err != nil {
+		log.Printf("could not observe store nodes: %s", err)
+		return
+	}
+
+	if s.blackListedNodes.Length() > 0 {
+		var blacklist map[string]node.Node
+
+		nodes, blacklist = compareBlackListNodes(nodes, s.blackListedNodes.Nodes())
+		s.blackListedNodes.Update(blacklist)
+	}
+
+	current, updated := comparePotentialNodes(nodes, s.currentNodes.Nodes())
+	if updated {
+		s.currentNodes.Update(current)
+		sendUpdatedNodes(current, s.nodeChannels)
+	}
+}
+
+// CompareBlackListNodes checks if a list of nodes contains any blacklisted nodes.  If a node is blacklisted, it will now be added
+// to the returned list of nodes.  This also returns an updated list of blacklisted nodes in case a currently blacklisted node is removed
+// from the courier system.
+func compareBlackListNodes(nodes []*node.Node, blacklist map[string]node.Node) ([]*node.Node, map[string]node.Node) {
+	nl := []*node.Node{}
+	bl := map[string]node.Node{}
+
+	for _, n := range nodes {
+		_, exist := blacklist[n.Id]
+		if exist {
+			bl[n.Id] = *n
+			log.Printf("Node %s is currently blacklisted - skipping node", n.Id)
+		} else {
+			nl = append(nl, n)
+		}
+	}
+
+	return nl, bl
+}
+
 // compares the Nodes returned from the NodeStore with the current Nodes in the service.
 // If there are differences, this will return true with an updated map of Nodes.
-func compareNodes(potential []*node.Node, expired map[string]node.Node) (map[string]node.Node, bool) {
+func comparePotentialNodes(potential []*node.Node, expired map[string]node.Node) (map[string]node.Node, bool) {
 	current := map[string]node.Node{}
 	new := map[string]*node.Node{}
 	updated := false
 
-	for _, node := range potential {
-		_, ok := expired[node.Id]
+	for _, n := range potential {
+		_, exist := expired[n.Id]
 
-		if ok {
-			current[node.Id] = *node
-			delete(expired, node.Id)
+		if exist {
+			current[n.Id] = *n
+			delete(expired, n.Id)
 		} else {
-			_, ok := new[node.Id]
-			if !ok {
-				current[node.Id] = *node
-				new[node.Id] = node
+			_, exist := new[n.Id]
+			if !exist {
+				current[n.Id] = *n
+				new[n.Id] = n
 				updated = true
 			}
 		}
@@ -107,4 +136,11 @@ func compareNodes(potential []*node.Node, expired map[string]node.Node) (map[str
 	}
 
 	return current, updated
+}
+
+// SendUpdatedNodes takes a list of channels and sends a map of nodes with their id as the key
+func sendUpdatedNodes(current map[string]node.Node, channels []chan (map[string]node.Node)) {
+	for _, channel := range channels {
+		channel <- current
+	}
 }
