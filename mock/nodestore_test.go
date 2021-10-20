@@ -84,6 +84,12 @@ func TestMockNodeStore_GetSubscribers(t *testing.T) {
 	if len(storenodes) != len(subnodes) {
 		t.Fatalf("expected length of nodes returned to be %v but got %v", len(subnodes), len(storenodes))
 	}
+
+	store.Fail = true
+	_, err := store.GetSubscribers("test")
+	if err == nil {
+		t.Fatal("expected GetSubscribers to fail but it passed")
+	}
 }
 
 func TestMockNodeStore_AddNode(t *testing.T) {
@@ -113,7 +119,11 @@ func TestMockNodeStore_AddNode(t *testing.T) {
 		}
 	}
 
-	store.AddNode(n)
+	store.Fail = true
+	err := store.AddNode(n)
+	if err == nil {
+		t.Fatal("expected AddNode to fail but it passed")
+	}
 }
 
 func TestMockNodeStore_RemoveNode(t *testing.T) {
@@ -145,5 +155,9 @@ func TestMockNodeStore_RemoveNode(t *testing.T) {
 		}
 	}
 
-	store.RemoveNode(n)
+	store.Fail = true
+	err := store.RemoveNode(n)
+	if err == nil {
+		t.Fatal("expected RemoveNode to fail but it passed")
+	}
 }

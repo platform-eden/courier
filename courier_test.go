@@ -3,8 +3,10 @@ package courier
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/platform-edn/courier/mock"
+	"google.golang.org/grpc"
 )
 
 func TestNewCourier(t *testing.T) {
@@ -18,10 +20,16 @@ func TestNewCourier(t *testing.T) {
 
 	store := mock.NewMockNodeStore(nodes...)
 	NewCourier(store,
+		WithId("test"),
 		Subscribes(sub...),
 		Broadcasts(broad...),
 		ListensOnAddress("test.com"),
 		ListensOnPort("3000"),
-		WithClientMessageContext(context.Background()),
+		WithClientContext(context.Background()),
+		WithDialOption(grpc.WithInsecure()),
+		WithFailedMessageWaitInterval(time.Second),
+		WithDialOption(grpc.WithInsecure()),
+		WithMaxFailedMessageAttempts(5),
+		WithNodeStoreInterval(time.Second),
 	)
 }

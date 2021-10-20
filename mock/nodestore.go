@@ -1,6 +1,8 @@
 package mock
 
 import (
+	"fmt"
+
 	"github.com/platform-edn/courier/lock"
 	"github.com/platform-edn/courier/node"
 )
@@ -9,6 +11,7 @@ type MockNodeStore struct {
 	lock           lock.Locker
 	BroadCastNodes map[string][]*node.Node
 	SubscribeNodes map[string][]*node.Node
+	Fail           bool
 }
 
 // returns a mock of a Node Store good for testing
@@ -46,6 +49,7 @@ func NewMockNodeStore(nodes ...*node.Node) *MockNodeStore {
 		lock:           lock.NewTicketLock(),
 		BroadCastNodes: bnodes,
 		SubscribeNodes: snodes,
+		Fail:           false,
 	}
 
 	return &m
@@ -53,6 +57,10 @@ func NewMockNodeStore(nodes ...*node.Node) *MockNodeStore {
 
 // Gets all of the subscribers that listen on the given subjects and returns them as a list
 func (n *MockNodeStore) GetSubscribers(subjects ...string) ([]*node.Node, error) {
+	if n.Fail {
+		return nil, fmt.Errorf("failed in mock")
+	}
+
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -68,6 +76,10 @@ func (n *MockNodeStore) GetSubscribers(subjects ...string) ([]*node.Node, error)
 
 // Adds a node to the Node Store.  Should be called when adding a courier service.
 func (m *MockNodeStore) AddNode(n *node.Node) error {
+	if m.Fail {
+		return fmt.Errorf("failed in mock")
+	}
+
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -100,6 +112,10 @@ func (m *MockNodeStore) AddNode(n *node.Node) error {
 
 // Removes a node from the Node Store.  Should be called when exiting a service
 func (m *MockNodeStore) RemoveNode(n *node.Node) error {
+	if m.Fail {
+		return fmt.Errorf("failed in mock")
+	}
+
 	m.lock.Lock()
 	defer m.lock.Unlock()
 

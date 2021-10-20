@@ -101,6 +101,27 @@ func (s *subscriberMap) AllSubscribers() []*node.Node {
 	return uniquesubs
 }
 
+func (s *subscriberMap) Length() int {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	return len(s.subscribers)
+}
+
+// Subscriber returns a Node with the given Id
+// TODO find a more efficient way to do this
+func (s *subscriberMap) Subscriber(id string) (*node.Node, error) {
+	for _, l := range s.subscribers {
+		i, ok := findSubscriber(l, id)
+		if ok {
+			return l[i], nil
+		}
+
+	}
+
+	return nil, fmt.Errorf("could not find node with id %s", id)
+}
+
 // checks if subscriber is listed under a subject.  If it exists, this returns the postion.
 // If it doesn't, false is returned.
 func findSubscriber(subscribers []*node.Node, id string) (int, bool) {

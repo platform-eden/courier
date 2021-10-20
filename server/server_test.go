@@ -28,8 +28,7 @@ func TestMessageServer_PublishMessage(t *testing.T) {
 
 	startTestServer(server)
 
-	ctx := context.Background()
-	client, conn, err := mock.NewMockClient(ctx, "bufnet", bufDialer)
+	client, conn, err := mock.NewMockClient("bufnet", bufDialer)
 	if err != nil {
 		t.Fatalf("could not create client: %s", err)
 	}
@@ -62,8 +61,7 @@ func TestMessageServer_ResponseMessage(t *testing.T) {
 
 	startTestServer(server)
 
-	ctx := context.Background()
-	client, conn, err := mock.NewMockClient(ctx, "bufnet", bufDialer)
+	client, conn, err := mock.NewMockClient("bufnet", bufDialer)
 	if err != nil {
 		t.Fatalf("could not create client: %s", err)
 	}
@@ -96,9 +94,7 @@ func TestMessageServer_RequestMessage(t *testing.T) {
 	info := server.ResponseChannel()
 
 	startTestServer(server)
-
-	ctx := context.Background()
-	client, conn, err := mock.NewMockClient(ctx, "bufnet", bufDialer)
+	client, conn, err := mock.NewMockClient("bufnet", bufDialer)
 	if err != nil {
 		t.Fatalf("could not create client: %s", err)
 	}
@@ -108,11 +104,10 @@ func TestMessageServer_RequestMessage(t *testing.T) {
 		ctx := context.Background()
 		m := proto.RequestMessageRequest{
 			Message: &proto.RequestMessage{
-				Id:            uuid.NewString(),
-				ReturnAddress: "test",
-				ReturnPort:    "80",
-				Subject:       "test",
-				Content:       []byte("test"),
+				Id:      uuid.NewString(),
+				NodeId:  uuid.NewString(),
+				Subject: "test",
+				Content: []byte("test"),
 			},
 		}
 
