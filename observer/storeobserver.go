@@ -1,12 +1,33 @@
 package observer
 
 import (
+	"fmt"
 	"log"
 	"time"
 
 	"github.com/platform-edn/courier/lock"
 	"github.com/platform-edn/courier/node"
 )
+
+type StoreObserverOption func(o *StoreObserver)
+
+func WithNodeStorer(store NodeStorer) StoreObserverOption {
+	return func(o *StoreObserver) {
+		o.store = store
+	}
+}
+
+func WithObserverInterval(interval time.Duration) StoreObserverOption {
+	return func(o *StoreObserver) {
+		o.observeInterval = interval
+	}
+}
+
+func WithSubjects(subjects []string) StoreObserverOption {
+	return func(o *StoreObserver) {
+		o.subjects = subjects
+	}
+}
 
 type StoreObserver struct {
 	store             NodeStorer
@@ -20,19 +41,26 @@ type StoreObserver struct {
 }
 
 // Returns a paused StoreObserver
-func NewStoreObserver(store NodeStorer, interval time.Duration, subjects []string) *StoreObserver {
-	s := StoreObserver{
-		store:             store,
-		observeInterval:   interval,
+func NewStoreObserver(options ...StoreObserverOption) (*StoreObserver, error) {
+	s := &StoreObserver{
+		observeInterval:   time.Second,
 		currentNodes:      NewNodeMap(),
 		blackListedNodes:  NewNodeMap(),
 		nodeChannels:      []chan (map[string]node.Node){},
 		failedConnections: make(chan node.Node),
-		subjects:          subjects,
+		subjects:          []string{},
 		lock:              lock.NewTicketLock(),
 	}
 
-	return &s
+	for _, option := range options {
+		option(s)
+	}
+
+	if s.store == nil {
+		return nil, fmt.Errorf("store observer must be given a store to observe")
+	}
+
+	return s, nil
 }
 
 // NodeChannel adds a channel to the StoreObserver that will receive a map of Nodes when the NodeStore has updated Nodes and returns it

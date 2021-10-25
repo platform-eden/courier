@@ -11,11 +11,11 @@ import (
 func TestStoreObserver_Observe(t *testing.T) {
 	observer := mock.NewMockObserver(time.Second * 1)
 
-	observe(observer)
+	go observe(observer)
 
 	observer.FailedConnectionChannel() <- node.Node{}
 
-	if observer.BLCount() != 1 {
-		t.Fatalf("expected blacklist count to equal 1 but got %v", observer.BLCount())
+	if observer.BlackListCount() != 1 {
+		t.Fatalf("expected blacklist count to equal 1 but got %v", observer.BlackListCount())
 	}
 }
