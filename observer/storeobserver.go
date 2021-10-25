@@ -32,7 +32,6 @@ func NewStoreObserver(store NodeStorer, interval time.Duration, subjects []strin
 		lock:              lock.NewTicketLock(),
 	}
 
-	observe(&s)
 	return &s
 }
 
