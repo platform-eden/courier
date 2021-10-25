@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/platform-edn/courier/client"
 	"github.com/platform-edn/courier/message"
-	"github.com/platform-edn/courier/node"
 	"github.com/platform-edn/courier/observer"
 	"github.com/platform-edn/courier/proto"
 	"github.com/platform-edn/courier/proxy"
@@ -22,93 +21,104 @@ import (
 // CourierOption is a set of options that may be passed as parameters when creating a Courier object
 type CourierOption func(c *Courier)
 
-// WithId sets the Id that this Courier service will use to be unique within the Courier system
-func WithId(id string) CourierOption {
-	return func(c *Courier) {
-		c.Node.Id = id
-	}
-}
-
 // Subscribes sets the subjects the Courier services will listen for
 func Subscribes(subjects ...string) CourierOption {
 	return func(c *Courier) {
-		c.Node.SubscribedSubjects = subjects
+		c.SubscribedSubjects = subjects
 	}
 }
 
 // Broadcasts sets the subjects Courier services will produce on
 func Broadcasts(subjects ...string) CourierOption {
 	return func(c *Courier) {
-		c.Node.BroadcastedSubjects = subjects
+		c.BroadcastedSubjects = subjects
+	}
+}
+
+func WithNodeStore(store observer.NodeStorer) CourierOption {
+	return func(c *Courier) {
+		c.Store = store
 	}
 }
 
 // ListensOnAddress sets the address for the Courier service to be found on
 func ListensOnAddress(address string) CourierOption {
 	return func(c *Courier) {
-		c.Node.Address = address
+		c.Address = address
 	}
 }
 
 // ListensOnPort sets the port for the Courier service to serve on
 func ListensOnPort(port string) CourierOption {
 	return func(c *Courier) {
-		c.Node.Port = port
+		c.Port = port
 	}
 }
 
 // WithClientContext sets the context for gRPC connections in the client
 func WithClientContext(ctx context.Context) CourierOption {
 	return func(c *Courier) {
-		c.clientOptions = append(c.clientOptions, client.WithContext(ctx))
+		c.ClientOptions = append(c.ClientOptions, client.WithContext(ctx))
 	}
 }
 
 // WithDialOption sets the dial options for gRPC connections in the client
 func WithDialOption(option ...grpc.DialOption) CourierOption {
 	return func(c *Courier) {
-		c.clientOptions = append(c.clientOptions, client.WithDialOption(option...))
+		c.ClientOptions = append(c.ClientOptions, client.WithDialOption(option...))
 	}
 }
 
 // WithFailedMessageWaitInterval sets the time in between attempts to send a message
 func WithFailedMessageWaitInterval(interval time.Duration) CourierOption {
 	return func(c *Courier) {
-		c.clientOptions = append(c.clientOptions, client.WithFailedWaitInterval(interval))
+		c.ClientOptions = append(c.ClientOptions, client.WithFailedWaitInterval(interval))
 	}
 }
 
 // WithMaxFailedMessageAttempts sets the max amount of attempts to send a message before blacklisting a node
 func WithMaxFailedMessageAttempts(attempts int) CourierOption {
 	return func(c *Courier) {
-		c.clientOptions = append(c.clientOptions, client.WithMaxFailedAttempts(attempts))
+		c.ClientOptions = append(c.ClientOptions, client.WithMaxFailedAttempts(attempts))
 	}
 }
 
 // WithNodeStoreInterval sets the interval that the observer waits before attempting to refresh the current nodes in the Courier system
-func WithNodeStoreInterval(interval time.Duration) CourierOption {
+func WithObserverInterval(interval time.Duration) CourierOption {
 	return func(c *Courier) {
-		c.observeInterval = interval
+		c.ObserverOptions = append(c.ObserverOptions, observer.WithObserverInterval(interval))
+	}
+}
+
+// StartOnCreation tells the Courier service to start on creation or wait to be started.  Starts by default.
+func StartOnCreation(tf bool) CourierOption {
+	return func(c *Courier) {
+		c.StartOnCreation = tf
 	}
 }
 
 // Courier is a messaging and node discovery service
 type Courier struct {
-	Node            *node.Node
-	observeInterval time.Duration
-	clientOptions   []client.ClientOption
-	messageProxy    *proxy.MessageProxy
-	messageClient   *client.MessageClient
+	Id                  string
+	Address             string
+	Port                string
+	SubscribedSubjects  []string
+	BroadcastedSubjects []string
+	Store               observer.NodeStorer
+	Proxy               proxy.Proxyer
+	Observer            observer.Observer
+	Client              client.Clienter
+	Server              proto.MessageServerServer
+	ClientOptions       []client.ClientOption
+	ObserverOptions     []observer.StoreObserverOption
+	StartOnCreation     bool
 }
 
 // NewCourier creates a new Courier service
 func NewCourier(store observer.NodeStorer, options ...CourierOption) (*Courier, error) {
-	n := node.NewNode("", localIp(), "8080", []string{}, []string{})
-
 	c := &Courier{
-		Node:            n,
-		observeInterval: time.Second * 3,
 		clientOptions:   []client.ClientOption{},
+		startOnCreation: true,
 	}
 
 	for _, option := range options {
@@ -125,18 +135,26 @@ func NewCourier(store observer.NodeStorer, options ...CourierOption) (*Courier, 
 		c.Node.Id = uuid.NewString()
 	}
 
+	return c, nil
+}
+
+func (c *Courier) Start() error {
 	s := server.NewMessageServer()
-	c.messageProxy = proxy.NewMessageProxy(s.PushChannel())
-	o := observer.NewStoreObserver(store, c.observeInterval, c.Node.BroadcastedSubjects)
-	c.messageClient = client.NewMessageClient(c.Node.Id, s.ResponseChannel(), o.NodeChannel(), o.FailedConnectionChannel(), c.clientOptions...)
-	go startMessageServer(s, c.Node.Port)
+
+	co.messageProxy = proxy.NewMessageProxy(s.PushChannel())
+
+	o, err := observer.NewStoreObserver()
+
+	mc, err := client.NewMessageClient(c.clientOptions...)
+
+	go startMessageServer(s, c.Port)
 
 	err := store.AddNode(c.Node)
 	if err != nil {
 		return nil, fmt.Errorf("could not add Node to NodeStore: %s", err)
 	}
 
-	return c, nil
+	return nil
 }
 
 // Subscribe takes a subject and returns a channel that will receive messages that are sent on that channel
@@ -146,7 +164,7 @@ func (c *Courier) Subscribe(subject string) chan message.Message {
 
 // PushChannel returns a channel that will take a message and send it to all services that are subscribed to it
 func (c *Courier) PushChannel(subject string) chan message.Message {
-	return c.messageClient.PushChannel()
+	return c.messageClient.MessageChannel()
 }
 
 // localIP returns the ip address this node is currently using
