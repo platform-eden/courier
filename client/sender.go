@@ -12,6 +12,24 @@ type Sender interface {
 	Send(context.Context, message.Message, proto.MessageServerClient) error
 }
 
+type senderType int
+
+const (
+	PublishSender senderType = iota
+	RequestSender
+	ResponseSender
+)
+
+func (s senderType) String() string {
+	types := []string{
+		"PublishSender",
+		"ResponseSender",
+		"RequestSender",
+	}
+
+	return types[int(s)]
+}
+
 type PublishClient struct{}
 
 func (p *PublishClient) Send(ctx context.Context, m message.Message, client proto.MessageServerClient) error {
