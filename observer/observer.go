@@ -17,15 +17,13 @@ type Observer interface {
 // Starts a Goroutine that will begin comparing current nodes and what nodes the NodeStore has.  If the NodeStore updates,
 // it sends a new map of Nodes to each Node Channel listening to the Observer.
 func observe(o Observer) {
-	go func() {
-		for {
-			select {
-			case <-time.After(o.ObserverInterval()):
-				o.AttemptUpdatingNodes()
+	for {
+		select {
+		case <-time.After(o.ObserverInterval()):
+			o.AttemptUpdatingNodes()
 
-			case n := <-o.FailedConnectionChannel():
-				o.BlackListNode(n)
-			}
+		case n := <-o.FailedConnectionChannel():
+			o.BlackListNode(n)
 		}
-	}()
+	}
 }
