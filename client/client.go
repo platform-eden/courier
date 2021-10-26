@@ -15,7 +15,7 @@ type ClientOption func(m *MessageClient)
 func WithId(id string) ClientOption {
 	return func(m *MessageClient) {
 		m.Id = id
-		m.requestSender = &RequestClient{NodeId: id}
+		m.Senders[RequestSender] = &RequestClient{NodeId: id}
 	}
 }
 
@@ -61,21 +61,9 @@ func WithMaxFailedAttempts(attempts int) ClientOption {
 	}
 }
 
-func WithPublishSender(s Sender) ClientOption {
+func WithSender(t senderType, s Sender) ClientOption {
 	return func(m *MessageClient) {
-		m.publishSender = s
-	}
-}
-
-func WithRequestSender(s Sender) ClientOption {
-	return func(m *MessageClient) {
-		m.requestSender = s
-	}
-}
-
-func WithResponseSender(s Sender) ClientOption {
-	return func(m *MessageClient) {
-		m.responseSender = s
+		m.Senders[t] = s
 	}
 }
 
@@ -87,9 +75,7 @@ type MessageClient struct {
 	messageChannel     chan message.Message
 	nodeChannel        chan map[string]node.Node
 	failedConnChannel  chan node.Node
-	publishSender      Sender
-	requestSender      Sender
-	responseSender     Sender
+	Senders            map[senderType]Sender
 	failedWaitInterval time.Duration
 	maxFailedAttempts  int
 	gRPCContext        context.Context
@@ -98,15 +84,17 @@ type MessageClient struct {
 
 func NewMessageClient(options ...ClientOption) (*MessageClient, error) {
 	c := &MessageClient{
-		Id:                 "",
-		responseMap:        newResponseMap(),
-		subscriberMap:      newSubscriberMap(),
-		infoChannel:        nil,
-		messageChannel:     make(chan message.Message),
-		nodeChannel:        nil,
-		publishSender:      &PublishClient{},
-		requestSender:      &RequestClient{},
-		responseSender:     &ResponseClient{},
+		Id:             "",
+		responseMap:    newResponseMap(),
+		subscriberMap:  newSubscriberMap(),
+		infoChannel:    nil,
+		messageChannel: make(chan message.Message),
+		nodeChannel:    nil,
+		Senders: map[senderType]Sender{
+			PublishSender:  &PublishClient{},
+			RequestSender:  &RequestClient{},
+			ResponseSender: &ResponseClient{},
+		},
 		failedConnChannel:  nil,
 		gRPCContext:        context.Background(),
 		dialOptions:        []grpc.DialOption{},
@@ -182,18 +170,7 @@ func (c *MessageClient) SubjectSubscribers(subject string) ([]*node.Node, error)
 }
 
 func (c *MessageClient) Sender(sender senderType) Sender {
-	var s Sender
-
-	switch sender {
-	case PublishSender:
-		s = c.publishSender
-	case RequestSender:
-		s = c.requestSender
-	case ResponseSender:
-		s = c.responseSender
-	}
-
-	return s
+	return c.Senders[sender]
 }
 
 func (c *MessageClient) Response(id string) (string, error) {
