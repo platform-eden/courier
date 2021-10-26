@@ -23,14 +23,21 @@ type MessageProxy struct {
 	Lock            lock.Locker
 }
 
-func NewMessageProxy(mchan chan message.Message) *MessageProxy {
-	p := MessageProxy{
-		InputChannel:    mchan,
+func NewMessageProxy(options ...ProxyOption) (*MessageProxy, error) {
+	p := &MessageProxy{
 		SubscriptionMap: map[string][]chan (message.Message){},
 		Lock:            lock.NewTicketLock(),
 	}
 
-	return &p
+	for _, option := range options {
+		option(p)
+	}
+
+	if p.InputChannel == nil {
+		return nil, fmt.Errorf("input channel must be set")
+	}
+
+	return p, nil
 }
 
 func (p *MessageProxy) MessageChannel() chan message.Message {

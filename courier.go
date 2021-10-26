@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/platform-edn/courier/client"
 	"github.com/platform-edn/courier/message"
+	"github.com/platform-edn/courier/node"
 	"github.com/platform-edn/courier/observer"
 	"github.com/platform-edn/courier/proto"
 	"github.com/platform-edn/courier/proxy"
@@ -25,6 +25,7 @@ type CourierOption func(c *Courier)
 func Subscribes(subjects ...string) CourierOption {
 	return func(c *Courier) {
 		c.SubscribedSubjects = subjects
+		c.ObserverOptions = append(c.ObserverOptions, observer.WithSubjects(subjects))
 	}
 }
 
@@ -38,6 +39,7 @@ func Broadcasts(subjects ...string) CourierOption {
 func WithNodeStore(store observer.NodeStorer) CourierOption {
 	return func(c *Courier) {
 		c.Store = store
+		c.ObserverOptions = append(c.ObserverOptions, observer.WithNodeStorer(store))
 	}
 }
 
@@ -63,9 +65,9 @@ func WithClientContext(ctx context.Context) CourierOption {
 }
 
 // WithDialOption sets the dial options for gRPC connections in the client
-func WithDialOption(option ...grpc.DialOption) CourierOption {
+func WithDialOptions(option ...grpc.DialOption) CourierOption {
 	return func(c *Courier) {
-		c.ClientOptions = append(c.ClientOptions, client.WithDialOption(option...))
+		c.ClientOptions = append(c.ClientOptions, client.WithDialOptions(option...))
 	}
 }
 
@@ -108,50 +110,81 @@ type Courier struct {
 	Proxy               proxy.Proxyer
 	Observer            observer.Observer
 	Client              client.Clienter
-	Server              proto.MessageServerServer
+	Server              server.Server
 	ClientOptions       []client.ClientOption
 	ObserverOptions     []observer.StoreObserverOption
 	StartOnCreation     bool
 }
 
 // NewCourier creates a new Courier service
-func NewCourier(store observer.NodeStorer, options ...CourierOption) (*Courier, error) {
+func NewCourier(options ...CourierOption) (*Courier, error) {
+	var err error
+	id := uuid.NewString()
+
 	c := &Courier{
-		clientOptions:   []client.ClientOption{},
-		startOnCreation: true,
+		Id:              id,
+		Port:            "8080",
+		ClientOptions:   []client.ClientOption{client.WithId(id)},
+		ObserverOptions: []observer.StoreObserverOption{},
+		StartOnCreation: true,
 	}
 
 	for _, option := range options {
 		option(c)
 	}
 
-	if c.Node.Id == "" {
-		// hostname, err := hostname()
-		// if err != nil {
-		// 	return nil, fmt.Errorf("could not set hostname for Courier: %s", err)
-		// }
+	if c.Store == nil {
+		return nil, fmt.Errorf("store cannot be empty")
+	}
+	if c.Address == "" {
+		c.Address = localIp()
+	}
 
-		// c.Node.Id = hostname
-		c.Node.Id = uuid.NewString()
+	c.Server = server.NewMessageServer()
+	c.ClientOptions = append(c.ClientOptions, client.WithInfoChannel(c.Server.ResponseChannel()))
+
+	c.Observer, err = observer.NewStoreObserver(c.ObserverOptions...)
+	if err != nil {
+		return nil, fmt.Errorf("could not create Observer: %s", err)
+	}
+	c.ClientOptions = append(c.ClientOptions, client.WithFailedConnectionChannel(c.Observer.FailedConnectionChannel()))
+
+	c.Client, err = client.NewMessageClient(c.ClientOptions...)
+	if err != nil {
+		return nil, fmt.Errorf("could not create MessageClient: %s", err)
+	}
+	c.Proxy, err = proxy.NewMessageProxy(
+		proxy.WithMessageChannel(
+			c.Server.PushChannel(),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("could not create MessageProxy: %s", err)
+	}
+
+	if c.StartOnCreation {
+		err = c.Start()
+		if err != nil {
+			return nil, fmt.Errorf("could not start Courier service: %s", err)
+		}
 	}
 
 	return c, nil
 }
 
 func (c *Courier) Start() error {
-	s := server.NewMessageServer()
+	go observer.Observe(c.Observer)
+	go client.ListenForSubscribers(c.Client)
+	go client.ListenForResponseInfo(c.Client)
+	go client.ListenForOutgoingMessages(c.Client)
+	go proxy.ForwardMessages(c.Proxy)
+	go startMessageServer(c.Server.(proto.MessageServerServer), c.Port)
 
-	co.messageProxy = proxy.NewMessageProxy(s.PushChannel())
+	n := node.NewNode(c.Id, c.Address, c.Port, c.SubscribedSubjects, c.BroadcastedSubjects)
 
-	o, err := observer.NewStoreObserver()
-
-	mc, err := client.NewMessageClient(c.clientOptions...)
-
-	go startMessageServer(s, c.Port)
-
-	err := store.AddNode(c.Node)
+	err := c.Store.AddNode(n)
 	if err != nil {
-		return nil, fmt.Errorf("could not add Node to NodeStore: %s", err)
+		return fmt.Errorf("could not add node: %s", err)
 	}
 
 	return nil
@@ -159,12 +192,12 @@ func (c *Courier) Start() error {
 
 // Subscribe takes a subject and returns a channel that will receive messages that are sent on that channel
 func (c *Courier) Subscribe(subject string) chan message.Message {
-	return c.messageProxy.Subscribe(subject)
+	return c.Proxy.Subscribe(subject)
 }
 
 // PushChannel returns a channel that will take a message and send it to all services that are subscribed to it
 func (c *Courier) PushChannel(subject string) chan message.Message {
-	return c.messageClient.MessageChannel()
+	return c.Client.MessageChannel()
 }
 
 // localIP returns the ip address this node is currently using
@@ -180,17 +213,8 @@ func localIp() string {
 	return localAddr.IP.String()
 }
 
-func hostname() (string, error) {
-	name, err := os.Hostname()
-	if err != nil {
-		return "", fmt.Errorf("could not access get hostname from os: %s", err)
-	}
-
-	return name, nil
-}
-
 // startMessageServer starts the message server on a given port
-func startMessageServer(m *server.MessageServer, port string) error {
+func startMessageServer(m proto.MessageServerServer, port string) error {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {
 		return fmt.Errorf("could not listen on port %s: %s", port, err)

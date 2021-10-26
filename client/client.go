@@ -37,7 +37,7 @@ func WithNodeChannel(channel chan map[string]node.Node) ClientOption {
 	}
 }
 
-func WithDialOption(option ...grpc.DialOption) ClientOption {
+func WithDialOptions(option ...grpc.DialOption) ClientOption {
 	return func(m *MessageClient) {
 		m.dialOptions = append(m.dialOptions, option...)
 	}
@@ -150,6 +150,10 @@ func (c *MessageClient) FailedWaitInterval() time.Duration {
 	return c.failedWaitInterval
 }
 
+func (c *MessageClient) Sender(sender senderType) Sender {
+	return c.Senders[sender]
+}
+
 func (c *MessageClient) PushResponse(response node.ResponseInfo) {
 	c.responseMap.PushResponse(response)
 }
@@ -167,10 +171,6 @@ func (c *MessageClient) SubjectSubscribers(subject string) ([]*node.Node, error)
 	}
 
 	return subscribers, nil
-}
-
-func (c *MessageClient) Sender(sender senderType) Sender {
-	return c.Senders[sender]
 }
 
 func (c *MessageClient) Response(id string) (string, error) {

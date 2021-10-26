@@ -8,6 +8,11 @@ import (
 	"github.com/platform-edn/courier/proto"
 )
 
+type Server interface {
+	PushChannel() chan message.Message
+	ResponseChannel() chan node.ResponseInfo
+}
+
 type MessageServer struct {
 	pushChannel     chan message.Message
 	responseChannel chan node.ResponseInfo
