@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-func TestMessageClient_PushChannel(t *testing.T) {
+func TestMessageClient_MessageChannel(t *testing.T) {
 	ichan := make(chan node.ResponseInfo)
 	defer close(ichan)
 	nchan := make(chan map[string]node.Node)
@@ -22,16 +22,19 @@ func TestMessageClient_PushChannel(t *testing.T) {
 	ctx := context.Background()
 	id := uuid.NewString()
 
-	client := NewMessageClient(
-		id,
-		ichan,
-		nchan,
-		fcchan,
+	client, err := NewMessageClient(
+		WithId(id),
+		WithInfoChannel(ichan),
+		WithNodeChannel(nchan),
+		WithFailedConnectionChannel(fcchan),
 		WithContext(ctx),
 	)
-	pchan := client.pushChannel
+	if err != nil {
+		t.Fatalf("failed creating MessageClient: %s", err)
+	}
+	pchan := client.MessageChannel()
 
-	if client.pushChannel != pchan {
+	if client.messageChannel != pchan {
 		t.Fatalf("expected push channel to be the same as one given but it wasn't")
 	}
 }
@@ -46,13 +49,16 @@ func TestMessageClient_ListenForResponseInfo(t *testing.T) {
 	ctx := context.Background()
 	id := uuid.NewString()
 
-	client := NewMessageClient(
-		id,
-		ichan,
-		nchan,
-		fcchan,
+	client, err := NewMessageClient(
+		WithId(id),
+		WithInfoChannel(ichan),
+		WithNodeChannel(nchan),
+		WithFailedConnectionChannel(fcchan),
 		WithContext(ctx),
 	)
+	if err != nil {
+		t.Fatalf("failed creating MessageClient: %s", err)
+	}
 	mid := uuid.NewString()
 	nid := uuid.NewString()
 
@@ -94,13 +100,16 @@ func TestMessageClient_ListenForSubscribers(t *testing.T) {
 	ctx := context.Background()
 	id := uuid.NewString()
 
-	client := NewMessageClient(
-		id,
-		ichan,
-		nchan,
-		fcchan,
+	client, err := NewMessageClient(
+		WithId(id),
+		WithInfoChannel(ichan),
+		WithNodeChannel(nchan),
+		WithFailedConnectionChannel(fcchan),
 		WithContext(ctx),
 	)
+	if err != nil {
+		t.Fatalf("failed creating MessageClient: %s", err)
+	}
 
 	nodecount := 10
 	subjects := []string{"sub1"}
@@ -117,9 +126,9 @@ func TestMessageClient_ListenForSubscribers(t *testing.T) {
 
 	nchan <- nm
 	pass := make(chan bool)
-	err := make(chan error)
+	errchan := make(chan error)
 	defer close(pass)
-	defer close(err)
+	defer close(errchan)
 
 	go func() {
 		for {
@@ -128,7 +137,7 @@ func TestMessageClient_ListenForSubscribers(t *testing.T) {
 			}
 			subs, e := client.subscriberMap.SubjectSubscribers("sub1")
 			if e != nil {
-				err <- e
+				errchan <- e
 			}
 			if len(subs) != nodecount {
 				time.Sleep(time.Second / 4)
@@ -142,7 +151,7 @@ func TestMessageClient_ListenForSubscribers(t *testing.T) {
 	select {
 	case <-pass:
 		break
-	case e := <-err:
+	case e := <-errchan:
 		t.Fatal(e)
 	case <-time.After(time.Second * 1):
 		t.Fatal("client's subscribermap took too long to update")
@@ -162,11 +171,11 @@ func TestMessageClient_ListenForOutgoingMessages(t *testing.T) {
 	reqs := mock.NewMockSender()
 	resps := mock.NewMockSender()
 
-	c := NewMessageClient(
-		id,
-		ichan,
-		nchan,
-		fcchan,
+	c, err := NewMessageClient(
+		WithId(id),
+		WithInfoChannel(ichan),
+		WithNodeChannel(nchan),
+		WithFailedConnectionChannel(fcchan),
 		WithContext(ctx),
 		WithDialOption(grpc.WithInsecure()),
 		WithFailedWaitInterval(time.Millisecond*300),
@@ -175,6 +184,9 @@ func TestMessageClient_ListenForOutgoingMessages(t *testing.T) {
 		WithRequestSender(reqs),
 		WithResponseSender(resps),
 	)
+	if err != nil {
+		t.Fatalf("failed creating MessageClient: %s", err)
+	}
 
 	subjects := []string{"test"}
 	n := mock.CreateTestNodes(1, &mock.TestNodeOptions{
@@ -190,7 +202,7 @@ func TestMessageClient_ListenForOutgoingMessages(t *testing.T) {
 	c.subscriberMap.AddSubscriber(*n)
 	c.responseMap.PushResponse(r)
 
-	push := c.PushChannel()
+	push := c.MessageChannel()
 
 	pubm := message.NewPubMessage(uuid.NewString(), "test", []byte("test"))
 	push <- pubm
@@ -223,11 +235,11 @@ func TestMessageClient_AttemptMessage(t *testing.T) {
 	id := uuid.NewString()
 	ctx := context.Background()
 
-	c := NewMessageClient(
-		id,
-		ichan,
-		nchan,
-		fcchan,
+	c, err := NewMessageClient(
+		WithId(id),
+		WithInfoChannel(ichan),
+		WithNodeChannel(nchan),
+		WithFailedConnectionChannel(fcchan),
 		WithContext(ctx),
 		WithDialOption(grpc.WithInsecure()),
 		WithFailedWaitInterval(time.Millisecond*300),
@@ -235,6 +247,9 @@ func TestMessageClient_AttemptMessage(t *testing.T) {
 	n := mock.CreateTestNodes(1, &mock.TestNodeOptions{})[0]
 	m := message.NewPubMessage(uuid.NewString(), "test", []byte("test"))
 	s := mock.NewMockSender()
+	if err != nil {
+		t.Fatalf("failed creating MessageClient: %s", err)
+	}
 
 	go c.attemptMessage(m, n, s)
 

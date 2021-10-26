@@ -19,6 +19,15 @@ func NewNodeMap() *NodeMap {
 	return &b
 }
 
+func (b *NodeMap) Node(id string) (node.Node, bool) {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	n, exist := b.nodes[id]
+
+	return n, exist
+}
+
 func (b *NodeMap) Nodes() map[string]node.Node {
 	b.lock.Lock()
 	defer b.lock.Unlock()

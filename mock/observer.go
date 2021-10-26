@@ -8,8 +8,8 @@ import (
 )
 
 type MockObserver struct {
-	UpdateCount       int
-	BlackListCount    int
+	UpdateCounter     int
+	BlackListCounter  int
 	Interval          time.Duration
 	FailedConnections chan node.Node
 	NewNodes          chan (map[string]node.Node)
@@ -18,8 +18,8 @@ type MockObserver struct {
 
 func NewMockObserver(interval time.Duration) *MockObserver {
 	o := MockObserver{
-		UpdateCount:       0,
-		BlackListCount:    0,
+		UpdateCounter:     0,
+		BlackListCounter:  0,
 		Interval:          interval,
 		FailedConnections: make(chan node.Node),
 		NewNodes:          make(chan map[string]node.Node),
@@ -36,7 +36,7 @@ func (m *MockObserver) AttemptUpdatingNodes() {
 	m.Lock.Lock()
 	defer m.Lock.Unlock()
 
-	m.UpdateCount++
+	m.UpdateCounter++
 }
 func (m *MockObserver) NodeChannel() chan (map[string]node.Node) {
 	return m.NewNodes
@@ -47,12 +47,12 @@ func (m *MockObserver) FailedConnectionChannel() chan node.Node {
 func (m *MockObserver) BlackListNode(node.Node) {
 	m.Lock.Lock()
 	defer m.Lock.Unlock()
-	m.BlackListCount++
+	m.BlackListCounter++
 }
 
-func (m *MockObserver) BLCount() int {
+func (m *MockObserver) BlackListCount() int {
 	m.Lock.Lock()
 	defer m.Lock.Unlock()
 
-	return m.BlackListCount
+	return m.BlackListCounter
 }

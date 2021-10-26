@@ -1,65 +1,73 @@
 package proxy
 
 import (
+	"fmt"
 	"log"
 	"time"
 
+	"github.com/platform-edn/courier/lock"
 	"github.com/platform-edn/courier/message"
 )
 
-type MessageProxy struct {
-	PushChannel   chan message.Message
-	Subscriptions map[string][]chan (message.Message)
+type ProxyOption func(p *MessageProxy)
+
+func WithMessageChannel(channel chan message.Message) ProxyOption {
+	return func(p *MessageProxy) {
+		p.InputChannel = channel
+	}
 }
 
-func NewMessageProxy(push chan message.Message) *MessageProxy {
-	mp := MessageProxy{
-		PushChannel:   push,
-		Subscriptions: map[string][]chan (message.Message){},
+type MessageProxy struct {
+	InputChannel    chan message.Message
+	SubscriptionMap map[string][]chan (message.Message)
+	Lock            lock.Locker
+}
+
+func NewMessageProxy(options ...ProxyOption) (*MessageProxy, error) {
+	p := &MessageProxy{
+		SubscriptionMap: map[string][]chan (message.Message){},
+		Lock:            lock.NewTicketLock(),
 	}
 
-	go mp.start()
+	for _, option := range options {
+		option(p)
+	}
 
-	return &mp
+	if p.InputChannel == nil {
+		return nil, fmt.Errorf("input channel must be set")
+	}
+
+	return p, nil
+}
+
+func (p *MessageProxy) MessageChannel() chan message.Message {
+	return p.InputChannel
+}
+
+func (p *MessageProxy) Subscriptions(subject string) ([]chan (message.Message), error) {
+	p.Lock.Lock()
+	defer p.Lock.Unlock()
+
+	subs, exist := p.SubscriptionMap[subject]
+	if !exist {
+		return nil, fmt.Errorf("no subscribers for subject %s", subject)
+	}
+
+	return subs, nil
 }
 
 // Subscribe takes a subject and returns a channel that will forward messages for that subject
-func (mp *MessageProxy) Subscribe(subject string) chan message.Message {
-	subscription := mp.Subscriptions[subject]
+func (p *MessageProxy) Subscribe(subject string) chan message.Message {
+	p.Lock.Lock()
+	defer p.Lock.Unlock()
 
+	subscription := p.SubscriptionMap[subject]
 	subscriber := make(chan message.Message)
-
 	subscription = append(subscription, subscriber)
 
-	mp.Subscriptions[subject] = subscription
+	p.SubscriptionMap[subject] = subscription
 
-	// need better logging here
 	log.Printf("%v New subscriber for subject: %s\n", time.Now().Format(time.RFC3339), subject)
 
 	return subscriber
-}
-
-func (mp *MessageProxy) start() {
-	for m := range mp.PushChannel {
-		err := send(m, mp.Subscriptions)
-		if err != nil {
-			log.Printf(err.Error())
-		}
-	}
-}
-
-func send(m message.Message, subscriptions map[string][]chan message.Message) error {
-	subscription := subscriptions[m.Subject]
-
-	if len(subscription) == 0 {
-		return &emptySubscriptionError{}
-	}
-
-	for _, subscriber := range subscription {
-		go func(subscriber chan message.Message) {
-			subscriber <- m
-		}(subscriber)
-	}
-
-	return nil
 }

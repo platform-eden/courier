@@ -16,7 +16,14 @@ func TestStoreObserver_AttemptUpdatingNodes(t *testing.T) {
 		BroadcastedSubjects: []string{"broad1", "broad2", "broad3"},
 	})
 	store := mock.NewMockNodeStore(nodes...)
-	observer := NewStoreObserver(store, (time.Second * 30), subjects)
+	observer, err := NewStoreObserver(
+		WithNodeStorer(store),
+		WithObserverInterval(time.Second*1),
+		WithSubjects(subjects),
+	)
+	if err != nil {
+		t.Fatalf("could not create observer: %s", err)
+	}
 	nodeChannel := observer.NodeChannel()
 
 	go observer.AttemptUpdatingNodes()

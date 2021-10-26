@@ -3,18 +3,41 @@ package client
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/platform-edn/courier/message"
 	"github.com/platform-edn/courier/node"
-	"github.com/platform-edn/courier/proto"
 	"google.golang.org/grpc"
 )
 
 type ClientOption func(m *MessageClient)
 
-func WithDialOption(option ...grpc.DialOption) ClientOption {
+func WithId(id string) ClientOption {
+	return func(m *MessageClient) {
+		m.Id = id
+		m.Senders[RequestSender] = &RequestClient{NodeId: id}
+	}
+}
+
+func WithInfoChannel(channel chan node.ResponseInfo) ClientOption {
+	return func(m *MessageClient) {
+		m.infoChannel = channel
+	}
+}
+
+func WithFailedConnectionChannel(channel chan node.Node) ClientOption {
+	return func(m *MessageClient) {
+		m.failedConnChannel = channel
+	}
+}
+
+func WithNodeChannel(channel chan map[string]node.Node) ClientOption {
+	return func(m *MessageClient) {
+		m.nodeChannel = channel
+	}
+}
+
+func WithDialOptions(option ...grpc.DialOption) ClientOption {
 	return func(m *MessageClient) {
 		m.dialOptions = append(m.dialOptions, option...)
 	}
@@ -38,51 +61,41 @@ func WithMaxFailedAttempts(attempts int) ClientOption {
 	}
 }
 
-func WithPublishSender(s Sender) ClientOption {
+func WithSender(t senderType, s Sender) ClientOption {
 	return func(m *MessageClient) {
-		m.publishSender = s
-	}
-}
-
-func WithRequestSender(s Sender) ClientOption {
-	return func(m *MessageClient) {
-		m.requestSender = s
-	}
-}
-
-func WithResponseSender(s Sender) ClientOption {
-	return func(m *MessageClient) {
-		m.responseSender = s
+		m.Senders[t] = s
 	}
 }
 
 type MessageClient struct {
+	Id                 string
 	responseMap        *responseMap
 	subscriberMap      *subscriberMap
 	infoChannel        chan node.ResponseInfo
-	pushChannel        chan message.Message
+	messageChannel     chan message.Message
 	nodeChannel        chan map[string]node.Node
 	failedConnChannel  chan node.Node
-	publishSender      Sender
-	requestSender      Sender
-	responseSender     Sender
+	Senders            map[senderType]Sender
 	failedWaitInterval time.Duration
 	maxFailedAttempts  int
 	gRPCContext        context.Context
 	dialOptions        []grpc.DialOption
 }
 
-func NewMessageClient(id string, info chan node.ResponseInfo, nchan chan map[string]node.Node, fcchan chan node.Node, options ...ClientOption) *MessageClient {
+func NewMessageClient(options ...ClientOption) (*MessageClient, error) {
 	c := &MessageClient{
-		responseMap:        newResponseMap(),
-		subscriberMap:      newSubscriberMap(),
-		infoChannel:        info,
-		pushChannel:        make(chan message.Message),
-		nodeChannel:        nchan,
-		publishSender:      &PublishClient{},
-		requestSender:      &RequestClient{NodeId: id},
-		responseSender:     &ResponseClient{},
-		failedConnChannel:  fcchan,
+		Id:             "",
+		responseMap:    newResponseMap(),
+		subscriberMap:  newSubscriberMap(),
+		infoChannel:    nil,
+		messageChannel: make(chan message.Message),
+		nodeChannel:    nil,
+		Senders: map[senderType]Sender{
+			PublishSender:  &PublishClient{},
+			RequestSender:  &RequestClient{},
+			ResponseSender: &ResponseClient{},
+		},
+		failedConnChannel:  nil,
 		gRPCContext:        context.Background(),
 		dialOptions:        []grpc.DialOption{},
 		failedWaitInterval: time.Second * 3,
@@ -91,114 +104,98 @@ func NewMessageClient(id string, info chan node.ResponseInfo, nchan chan map[str
 
 	for _, option := range options {
 		option(c)
+
 	}
 
-	go c.listenForResponseInfo()
-	go c.listenForSubscribers()
-	go c.listenForOutgoingMessages()
-
-	return c
-}
-
-func (c *MessageClient) PushChannel() chan message.Message {
-	return c.pushChannel
-}
-
-func (c *MessageClient) listenForResponseInfo() {
-	for response := range c.infoChannel {
-		c.responseMap.PushResponse(response)
+	if c.Id == "" {
+		return nil, fmt.Errorf("id cannot be empty string")
+	} else if c.infoChannel == nil {
+		return nil, fmt.Errorf("info channel cannot be nil")
+	} else if c.nodeChannel == nil {
+		return nil, fmt.Errorf("node channel cannot be nil")
 	}
+
+	return c, nil
 }
 
-func (c *MessageClient) listenForSubscribers() {
-	for subs := range c.nodeChannel {
-		count := 0
-		for _, sub := range subs {
-			count++
-			c.subscriberMap.AddSubscriber(sub)
-		}
-	}
+func (c *MessageClient) InfoChannel() chan node.ResponseInfo {
+	return c.infoChannel
 }
 
-func (c *MessageClient) listenForOutgoingMessages() {
-	for m := range c.pushChannel {
-		go func(m message.Message) {
-			switch m.Type {
-			case message.PubMessage:
-				nodes, err := c.subscriberMap.SubjectSubscribers(m.Subject)
-				if err != nil {
-					log.Printf("could not get subject subscribers: %s", err)
-				}
+func (c *MessageClient) NodeChannel() chan map[string]node.Node {
+	return c.nodeChannel
+}
 
-				for _, n := range nodes {
-					go c.attemptMessage(m, n, c.publishSender)
-				}
-			case message.ReqMessage:
-				nodes, err := c.subscriberMap.SubjectSubscribers(m.Subject)
-				if err != nil {
-					log.Printf("could not get subject subscribers: %s", err)
-				}
+func (c *MessageClient) MessageChannel() chan message.Message {
+	return c.messageChannel
+}
 
-				for _, n := range nodes {
-					go c.attemptMessage(m, n, c.requestSender)
-				}
-			case message.RespMessage:
-				id, err := c.responseMap.PopResponse(m.Id)
-				if err != nil {
-					log.Printf("could not get node id for message id %s: %s", m.Id, err)
-				}
+func (c *MessageClient) FailedConnectionChannel() chan node.Node {
+	return c.failedConnChannel
+}
 
-				n, err := c.subscriberMap.Subscriber(id)
-				if err != nil {
-					log.Printf("could node with id %s: %s", id, err)
-				}
+func (c *MessageClient) DialOptions() []grpc.DialOption {
+	return c.dialOptions
+}
 
-				go c.attemptMessage(m, n, c.responseSender)
-			}
-		}(m)
+func (c *MessageClient) GRPCContext() context.Context {
+	return c.gRPCContext
+}
+
+func (c *MessageClient) MaxFailedAttempts() int {
+	return c.maxFailedAttempts
+}
+
+func (c *MessageClient) FailedWaitInterval() time.Duration {
+	return c.failedWaitInterval
+}
+
+func (c *MessageClient) Sender(sender senderType) Sender {
+	return c.Senders[sender]
+}
+
+func (c *MessageClient) PushResponse(response node.ResponseInfo) {
+	c.responseMap.PushResponse(response)
+}
+
+func (c *MessageClient) UpdateNodes(nodes map[string]node.Node) {
+	for _, n := range nodes {
+		c.subscriberMap.AddSubscriber(n)
 	}
 }
 
-// attemptMessage attempts to invoke a Sender's Send method.  If no errors are returned, this method exits.
-// If errors are returned, attemptMessage will wait a disignated amount of time before attempting to send again.
-// This method will keep attempting to send a message until the max amount of attempts are reached, then it will remove
-// the receiver node from the subscriberMap and send the node to anyone listening on the failedConnChannel
-func (c *MessageClient) attemptMessage(m message.Message, receiver *node.Node, sender Sender) {
-	attempt := 0
-	for {
-		client, conn, err := createGRPCClient(receiver.Address, receiver.Port, c.dialOptions...)
-		if err == nil {
-			err = sender.Send(c.gRPCContext, m, client)
-			if err == nil {
-				conn.Close()
-				break
-			}
-		}
-
-		conn.Close()
-		if attempt >= c.maxFailedAttempts {
-			log.Printf("failed creating connection to %s:%s: %s\n", receiver.Address, receiver.Port, err)
-			log.Printf("will now be removing and blacklisting %s\n", receiver.Id)
-
-			c.subscriberMap.RemoveSubscriber(receiver)
-			c.failedConnChannel <- *receiver
-			break
-		}
-
-		time.Sleep(c.failedWaitInterval)
-		attempt++
-		continue
-	}
-}
-
-// createGRPCClient takes an address, port, and dialOptions and returns a client connection
-func createGRPCClient(address string, port string, options ...grpc.DialOption) (proto.MessageServerClient, *grpc.ClientConn, error) {
-	conn, err := grpc.Dial(fmt.Sprintf("%s:%s", address, port), options...)
+func (c *MessageClient) SubjectSubscribers(subject string) ([]*node.Node, error) {
+	subscribers, err := c.subscriberMap.SubjectSubscribers(subject)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to dial %s: %v", fmt.Sprintf("%s:%s", address, port), err)
+		return nil, err
 	}
 
-	client := proto.NewMessageServerClient(conn)
+	return subscribers, nil
+}
 
-	return client, conn, nil
+func (c *MessageClient) Response(id string) (string, error) {
+	nodeId, err := c.responseMap.PopResponse(id)
+	if err != nil {
+		return "", err
+	}
+
+	return nodeId, nil
+}
+
+func (c *MessageClient) Subscriber(id string) (*node.Node, error) {
+	subscriber, err := c.subscriberMap.Subscriber(id)
+	if err != nil {
+		return nil, err
+	}
+
+	return subscriber, nil
+}
+
+func (c *MessageClient) RemoveSubscriber(subscriber *node.Node) error {
+	err := c.subscriberMap.RemoveSubscriber(subscriber)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

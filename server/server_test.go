@@ -28,7 +28,7 @@ func TestMessageServer_PublishMessage(t *testing.T) {
 
 	startTestServer(server)
 
-	client, conn, err := mock.NewMockClient("bufnet", bufDialer)
+	client, conn, err := mock.NewLocalGRPCClient("bufnet", bufDialer)
 	if err != nil {
 		t.Fatalf("could not create client: %s", err)
 	}
@@ -61,7 +61,7 @@ func TestMessageServer_ResponseMessage(t *testing.T) {
 
 	startTestServer(server)
 
-	client, conn, err := mock.NewMockClient("bufnet", bufDialer)
+	client, conn, err := mock.NewLocalGRPCClient("bufnet", bufDialer)
 	if err != nil {
 		t.Fatalf("could not create client: %s", err)
 	}
@@ -94,7 +94,7 @@ func TestMessageServer_RequestMessage(t *testing.T) {
 	info := server.ResponseChannel()
 
 	startTestServer(server)
-	client, conn, err := mock.NewMockClient("bufnet", bufDialer)
+	client, conn, err := mock.NewLocalGRPCClient("bufnet", bufDialer)
 	if err != nil {
 		t.Fatalf("could not create client: %s", err)
 	}

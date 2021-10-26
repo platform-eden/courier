@@ -14,7 +14,7 @@ func TestPublishClient_Send(t *testing.T) {
 	lis := bufconn.Listen(1024 * 1024)
 	s := mock.NewMockServer(lis)
 
-	client, conn, err := mock.NewMockClient("bufnet", s.BufDialer)
+	client, conn, err := mock.NewLocalGRPCClient("bufnet", s.BufDialer)
 	if err != nil {
 		t.Fatalf("could not creat client for server: %s", err)
 	}
@@ -37,7 +37,7 @@ func TestRequestClient_Send(t *testing.T) {
 	lis := bufconn.Listen(1024 * 1024)
 	s := mock.NewMockServer(lis)
 
-	client, conn, err := mock.NewMockClient("bufnet", s.BufDialer)
+	client, conn, err := mock.NewLocalGRPCClient("bufnet", s.BufDialer)
 	if err != nil {
 		t.Fatalf("could not creat client for server: %s", err)
 	}
@@ -60,7 +60,7 @@ func TestResponseClient_Send(t *testing.T) {
 	lis := bufconn.Listen(1024 * 1024)
 	s := mock.NewMockServer(lis)
 
-	client, conn, err := mock.NewMockClient("bufnet", s.BufDialer)
+	client, conn, err := mock.NewLocalGRPCClient("bufnet", s.BufDialer)
 	if err != nil {
 		t.Fatalf("could not creat client for server: %s", err)
 	}
