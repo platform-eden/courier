@@ -11,7 +11,7 @@ import (
 func TestStoreObserver_Observe(t *testing.T) {
 	observer := mock.NewMockObserver(time.Second * 1)
 
-	go observe(observer)
+	go Observe(observer)
 
 	observer.FailedConnectionChannel() <- node.Node{}
 

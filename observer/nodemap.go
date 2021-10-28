@@ -11,54 +11,40 @@ type NodeMap struct {
 }
 
 func NewNodeMap() *NodeMap {
-	b := NodeMap{
+	nm := NodeMap{
 		nodes: map[string]node.Node{},
 		lock:  lock.NewTicketLock(),
 	}
 
-	return &b
+	return &nm
 }
 
-func (b *NodeMap) Node(id string) (node.Node, bool) {
-	b.lock.Lock()
-	defer b.lock.Unlock()
+func (nm *NodeMap) Node(id string) (node.Node, bool) {
+	nm.lock.Lock()
+	defer nm.lock.Unlock()
 
-	n, exist := b.nodes[id]
+	n, exist := nm.nodes[id]
 
 	return n, exist
 }
 
-func (b *NodeMap) Nodes() map[string]node.Node {
-	b.lock.Lock()
-	defer b.lock.Unlock()
+func (nm *NodeMap) Add(n node.Node) {
+	nm.lock.Lock()
+	defer nm.lock.Unlock()
 
-	return b.nodes
+	nm.nodes[n.Id] = n
 }
 
-func (b *NodeMap) Update(nmap map[string]node.Node) {
-	b.lock.Lock()
-	defer b.lock.Unlock()
+func (nm *NodeMap) Remove(id string) {
+	nm.lock.Lock()
+	defer nm.lock.Unlock()
 
-	b.nodes = nmap
+	delete(nm.nodes, id)
 }
 
-func (b *NodeMap) AddNode(n node.Node) {
-	b.lock.Lock()
-	defer b.lock.Unlock()
+func (nm *NodeMap) Length() int {
+	nm.lock.Lock()
+	defer nm.lock.Unlock()
 
-	b.nodes[n.Id] = n
-}
-
-func (b *NodeMap) RemoveNode(id string) {
-	b.lock.Lock()
-	defer b.lock.Unlock()
-
-	delete(b.nodes, id)
-}
-
-func (b *NodeMap) Length() int {
-	b.lock.Lock()
-	defer b.lock.Unlock()
-
-	return len(b.nodes)
+	return len(nm.nodes)
 }

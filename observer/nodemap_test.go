@@ -13,7 +13,7 @@ func TestNodeMap_Nodes(t *testing.T) {
 	nodes := mock.CreateTestNodes(l, &mock.TestNodeOptions{})
 
 	for _, n := range nodes {
-		b.AddNode(*n)
+		b.Add(*n)
 	}
 
 	for _, n := range nodes {
@@ -45,13 +45,13 @@ func TestNodeMap_Update(t *testing.T) {
 	}
 }
 
-func TestNodeMap_AddNode(t *testing.T) {
+func TestNodeMap_Add(t *testing.T) {
 	b := NewNodeMap()
 	l := 10
 	nodes := mock.CreateTestNodes(l, &mock.TestNodeOptions{})
 
 	for _, n := range nodes {
-		b.AddNode(*n)
+		b.Add(*n)
 	}
 
 	bl := b.Length()
@@ -61,17 +61,17 @@ func TestNodeMap_AddNode(t *testing.T) {
 	}
 }
 
-func TestNodeMap_RemoveNode(t *testing.T) {
+func TestNodeMap_Remove(t *testing.T) {
 	b := NewNodeMap()
 	l := 10
 	nodes := mock.CreateTestNodes(l, &mock.TestNodeOptions{})
 
 	for _, n := range nodes {
-		b.AddNode(*n)
+		b.Add(*n)
 	}
 
 	for _, n := range nodes {
-		b.RemoveNode(n.Id)
+		b.Remove(n.Id)
 	}
 
 	bl := b.Length()
@@ -87,7 +87,7 @@ func TestNodeMap_Length(t *testing.T) {
 	nodes := mock.CreateTestNodes(l, &mock.TestNodeOptions{})
 
 	for _, n := range nodes {
-		b.AddNode(*n)
+		b.Add(*n)
 	}
 
 	bl := b.Length()

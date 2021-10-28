@@ -7,94 +7,114 @@ import (
 	"github.com/platform-edn/courier/node"
 )
 
-type Observer interface {
-	ObserverInterval() time.Duration
-	FailedConnectionChannel() chan node.Node
-	GetCourierNodes() ([]*node.Node, error)
-	TotalBlackListedNodes() int
-	BlackListedNodes() map[string]node.Node
-	UpdateBlackListedNodes(map[string]node.Node)
-	AddBlackListNode(node.Node)
-	CurrentNodes() map[string]node.Node
-	RemoveCurrentNode(string)
-	UpdateCurrentNodes(map[string]node.Node)
-	SendNodes(map[string]node.Node)
-}
-
 // Starts a Goroutine that will begin comparing current nodes and what nodes the NodeStore has.  If the NodeStore updates,
 // it sends a new map of Nodes to each Node Channel listening to the Observer.
-func Observe(observer Observer) {
+func Observe(options ObserveOptions) {
+	blacklist := NewNodeMap()
+	current := NewNodeMap()
+	blacklisted := make(chan node.Node)
+	defer close(blacklisted)
+	active := make(chan node.Node)
+	defer close(active)
+
 	for {
 		select {
-		case <-time.After(observer.ObserverInterval()):
-			AttemptUpdatingNodes(observer)
+		case <-time.After(options.Interval):
+			nodes, err := options.Store.GetSubscribers(options.Subjects...)
+			if err != nil {
+				log.Printf("could not observe Courier nodes: %s", err)
+				return
+			}
 
-		case n := <-observer.FailedConnectionChannel():
-			observer.AddBlackListNode(n)
-			observer.RemoveCurrentNode(n.Id)
+			gout := generate(nodes...)
+			cblout := compareBlackList(gout, blacklisted, blacklist)
+			cclout := compareCurrentList(cblout, active, current)
+			sent := sendNodes(cclout, options.NewNodeChannel)
+
+			tblacklist := NewNodeMap()
+			tcurrent := NewNodeMap()
+			done := false
+
+			for !done {
+				select {
+				case b := <-blacklisted:
+					tblacklist.Add(b)
+				case a := <-active:
+					tcurrent.Add(a)
+				case <-sent:
+					done = true
+				}
+			}
+
+			blacklist = tblacklist
+			current = tcurrent
+
+		case n := <-options.FailedConnectionChannel:
+			blacklist.Add(n)
+			current.Remove(n.Id)
 		}
 	}
 }
 
-// AttemptUpdatingNodes gets nodes from a node store, removes any blacklisted nodes, and sends updated nodes through a channel if there are any new ones or any removed
-func AttemptUpdatingNodes(observer Observer) {
-	nodes, err := observer.GetCourierNodes()
-	if err != nil {
-		log.Printf("could not observe Courier nodes: %s", err)
-		return
-	}
+func generate(nodes ...*node.Node) <-chan node.Node {
+	out := make(chan node.Node)
+	go func() {
+		for _, n := range nodes {
+			out <- *n
+		}
+		close(out)
+	}()
 
-	nodes = CompareBlackListNodes(nodes, observer)
-	CompareCurrentNodes(nodes, observer)
+	return out
 }
 
-// CompareBlackListNodes checks if a list of nodes contains any blacklisted nodes.  If a node is blacklisted, it will now be added
-// to the returned list of nodes.  This also returns an updated list of blacklisted nodes in case a currently blacklisted node is removed
-// from the courier system.
-func CompareBlackListNodes(nodes []*node.Node, observer Observer) []*node.Node {
-	if observer.TotalBlackListedNodes() == 0 {
-		return nodes
-	}
+func compareBlackList(in <-chan node.Node, blacklisted chan node.Node, blacklist node.NodeMapper) <-chan node.Node {
+	out := make(chan node.Node)
+	go func() {
+		for n := range in {
+			if blacklist.Length() != 0 {
+				_, exist := blacklist.Node(n.Id)
+				if exist {
+					log.Printf("Node %s is currently blacklisted - skipping node", n.Id)
+					blacklisted <- n
+					continue
+				}
+			}
 
-	blacklist := observer.BlackListedNodes()
-	nl := []*node.Node{}
-	bl := map[string]node.Node{}
-
-	for _, n := range nodes {
-		_, exist := blacklist[n.Id]
-		if exist {
-			bl[n.Id] = *n
-			log.Printf("Node %s is currently blacklisted - skipping node", n.Id)
-		} else {
-			nl = append(nl, n)
+			out <- n
 		}
-	}
+		close(out)
+	}()
 
-	observer.UpdateBlackListedNodes(blacklist)
-
-	return nl
+	return out
 }
 
-// compares the Nodes returned from the NodeStore with the current Nodes in the service.
-// If there are differences, this will return true with an updated map of Nodes.
-func CompareCurrentNodes(new []*node.Node, observer Observer) {
-	current := observer.CurrentNodes()
-	updated := map[string]node.Node{}
-	update := false
-
-	for _, n := range new {
-		updated[n.Id] = *n
-
-		_, exist := current[n.Id]
-		if exist {
-			delete(current, n.Id)
-		} else {
-			update = true
+func compareCurrentList(in <-chan node.Node, active chan node.Node, current node.NodeMapper) <-chan node.Node {
+	out := make(chan node.Node)
+	go func() {
+		for n := range in {
+			_, exist := current.Node(n.Id)
+			if exist {
+				continue
+			}
+			out <- n
 		}
-	}
+		close(out)
+	}()
 
-	if len(current) != 0 || update {
-		observer.UpdateCurrentNodes(updated)
-		observer.SendNodes(updated)
-	}
+	return out
+}
+
+func sendNodes(in <-chan node.Node, newNodes chan node.Node) <-chan bool {
+	done := make(chan bool)
+	go func() {
+		for n := range in {
+			newNodes <- n
+		}
+
+		done <- true
+		close(done)
+	}()
+
+	return done
 }
