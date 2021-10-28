@@ -1,4 +1,4 @@
-package observer
+package observe
 
 import "github.com/platform-edn/courier/node"
 
