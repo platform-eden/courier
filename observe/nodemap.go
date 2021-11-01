@@ -10,10 +10,14 @@ type NodeMap struct {
 	lock  lock.Locker
 }
 
-func NewNodeMap() *NodeMap {
+func NewNodeMap(nodes ...node.Node) *NodeMap {
 	nm := NodeMap{
 		nodes: map[string]node.Node{},
 		lock:  lock.NewTicketLock(),
+	}
+
+	for _, n := range nodes {
+		nm.Add(n)
 	}
 
 	return &nm
@@ -40,6 +44,19 @@ func (nm *NodeMap) Remove(id string) {
 	defer nm.lock.Unlock()
 
 	delete(nm.nodes, id)
+}
+
+func (nm *NodeMap) Update(nodes ...node.Node) {
+	nm.lock.Lock()
+	defer nm.lock.Unlock()
+
+	new := map[string]node.Node{}
+
+	for _, n := range nodes {
+		new[n.Id] = n
+	}
+
+	nm.nodes = new
 }
 
 func (nm *NodeMap) Length() int {

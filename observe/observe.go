@@ -2,65 +2,60 @@ package observe
 
 import (
 	"log"
-	"time"
 
 	"github.com/platform-edn/courier/node"
 )
 
 // Starts a Goroutine that will begin comparing current nodes and what nodes the NodeStore has.  If the NodeStore updates,
 // it sends a new map of Nodes to each Node Channel listening to the Observer.
-func Observe(options ObserveOptions) {
-	blacklist := NewNodeMap()
-	current := NewNodeMap()
-	blacklisted := make(chan node.Node)
-	defer close(blacklisted)
-	active := make(chan node.Node)
-	defer close(active)
-
+func Observe(observeChannel <-chan []node.Node, newChannel chan node.Node, failedConnectionChannel <-chan node.Node, blacklist node.NodeMapper, current node.NodeMapper) {
 	for {
 		select {
-		case <-time.After(options.Interval):
-			nodes, err := options.Store.GetSubscribers(options.Subjects...)
-			if err != nil {
-				log.Printf("could not observe Courier nodes: %s", err)
-				return
-			}
+		case nodes := <-observeChannel:
+			bll, cll := updateNodes(nodes, newChannel, blacklist, current)
+			blacklist.Update(bll...)
+			current.Update(cll...)
 
-			gout := generate(nodes...)
-			cblout := compareBlackList(gout, blacklisted, blacklist)
-			cclout := compareCurrentList(cblout, active, current)
-			sent := sendNodes(cclout, options.NewNodeChannel)
-
-			tblacklist := NewNodeMap()
-			tcurrent := NewNodeMap()
-			done := false
-
-			for !done {
-				select {
-				case b := <-blacklisted:
-					tblacklist.Add(b)
-				case a := <-active:
-					tcurrent.Add(a)
-				case <-sent:
-					done = true
-				}
-			}
-
-			blacklist = tblacklist
-			current = tcurrent
-
-		case n := <-options.FailedConnectionChannel:
+		case n := <-failedConnectionChannel:
 			blacklist.Add(n)
 			current.Remove(n.Id)
 		}
 	}
+
+	//need to implement of graceful shutdown
+	//close(newChannel)
 }
 
-func generate(nodes ...*node.Node) <-chan node.Node {
+func updateNodes(nodes []node.Node, nodeChannel chan node.Node, blacklist node.NodeMapper, current node.NodeMapper) ([]node.Node, []node.Node) {
+	blacklisted := make(chan node.Node, blacklist.Length()+1)
+	active := make(chan node.Node, len(nodes)+1)
+
+	gout := generate(nodes...)
+	cblout := compareBlackList(gout, blacklisted, blacklist)
+	cclout := compareCurrentList(cblout, active, current)
+	done := sendNodes(cclout, nodeChannel)
+
+	<-done
+
+	bll := []node.Node{}
+	for n := range blacklisted {
+		bll = append(bll, n)
+	}
+
+	cll := []node.Node{}
+	for n := range active {
+		cll = append(cll, n)
+	}
+
+	return bll, cll
+}
+
+// generate takes a set of nodes and returns a channel of those nodes
+func generate(nodes ...node.Node) <-chan node.Node {
 	out := make(chan node.Node)
 	go func() {
 		for _, n := range nodes {
-			out <- *n
+			out <- n
 		}
 		close(out)
 	}()
@@ -68,6 +63,8 @@ func generate(nodes ...*node.Node) <-chan node.Node {
 	return out
 }
 
+// compareBlackList comapres incoming nodes to a map of nodes.  If the node is in the map, this function logs to output.
+// If a node does not exist in the blacklist, it is passed through the returned node channel.
 func compareBlackList(in <-chan node.Node, blacklisted chan node.Node, blacklist node.NodeMapper) <-chan node.Node {
 	out := make(chan node.Node)
 	go func() {
@@ -83,16 +80,21 @@ func compareBlackList(in <-chan node.Node, blacklisted chan node.Node, blacklist
 
 			out <- n
 		}
+
 		close(out)
+		close(blacklisted)
 	}()
 
 	return out
 }
 
+// compareCurrentList compares nodes coming in to a map of nodes. All nodes passed in are passed out through the
+// active channel and all new nodes are passed through the returned node channel.
 func compareCurrentList(in <-chan node.Node, active chan node.Node, current node.NodeMapper) <-chan node.Node {
 	out := make(chan node.Node)
 	go func() {
 		for n := range in {
+			active <- n
 			_, exist := current.Node(n.Id)
 			if exist {
 				continue
@@ -100,11 +102,14 @@ func compareCurrentList(in <-chan node.Node, active chan node.Node, current node
 			out <- n
 		}
 		close(out)
+		close(active)
 	}()
 
 	return out
 }
 
+// sendNodes sends nodes passed to it out to the newNodes channel. Returns a channel that will return true once
+// the in channel is closed and sendNodes is complete
 func sendNodes(in <-chan node.Node, newNodes chan node.Node) <-chan bool {
 	done := make(chan bool)
 	go func() {
