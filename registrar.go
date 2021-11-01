@@ -6,6 +6,7 @@ import (
 	"github.com/platform-edn/courier/node"
 )
 
+// registerNodes either receives new nodes to be sifted and sent out of the newChannel or receives nodes that could not receive a message that need to be blacklisted.
 func registerNodes(observeChannel <-chan []node.Node, newChannel chan node.Node, failedConnectionChannel <-chan node.Node, blacklist NodeMapper, current NodeMapper) {
 	for {
 		select {
@@ -24,6 +25,7 @@ func registerNodes(observeChannel <-chan []node.Node, newChannel chan node.Node,
 	//close(newChannel)
 }
 
+// updateNodes compares a list of nodes with blacklisted nodes and current nodes.  Any new nodes are sent through the nodeChannel.  Returns a new blacklist and current node list.
 func updateNodes(nodes []node.Node, nodeChannel chan node.Node, blacklist NodeMapper, current NodeMapper) ([]node.Node, []node.Node) {
 	blacklisted := make(chan node.Node, blacklist.Length()+1)
 	active := make(chan node.Node, len(nodes)+1)
