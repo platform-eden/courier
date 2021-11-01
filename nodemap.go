@@ -1,4 +1,4 @@
-package observe
+package courier
 
 import (
 	"github.com/platform-edn/courier/lock"

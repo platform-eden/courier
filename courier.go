@@ -11,7 +11,6 @@ import (
 	"github.com/platform-edn/courier/client"
 	"github.com/platform-edn/courier/message"
 	"github.com/platform-edn/courier/node"
-	"github.com/platform-edn/courier/observer"
 	"github.com/platform-edn/courier/proto"
 	"github.com/platform-edn/courier/proxy"
 	"github.com/platform-edn/courier/server"
@@ -25,7 +24,6 @@ type CourierOption func(c *Courier)
 func Subscribes(subjects ...string) CourierOption {
 	return func(c *Courier) {
 		c.SubscribedSubjects = subjects
-		c.ObserverOptions = append(c.ObserverOptions, observer.WithSubjects(subjects))
 	}
 }
 
@@ -36,10 +34,9 @@ func Broadcasts(subjects ...string) CourierOption {
 	}
 }
 
-func WithNodeStore(store observer.NodeStorer) CourierOption {
+func WithNodeStore(store NodeStorer) CourierOption {
 	return func(c *Courier) {
 		c.Store = store
-		c.ObserverOptions = append(c.ObserverOptions, observer.WithNodeStorer(store))
 	}
 }
 
@@ -106,13 +103,11 @@ type Courier struct {
 	Port                string
 	SubscribedSubjects  []string
 	BroadcastedSubjects []string
-	Store               observer.NodeStorer
 	Proxy               proxy.Proxyer
-	Observer            observer.Observer
+	Observer            Observer
 	Client              client.Clienter
 	Server              server.Server
 	ClientOptions       []client.ClientOption
-	ObserverOptions     []observer.StoreObserverOption
 	StartOnCreation     bool
 }
 
@@ -125,7 +120,6 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 		Id:              id,
 		Port:            "8080",
 		ClientOptions:   []client.ClientOption{client.WithId(id)},
-		ObserverOptions: []observer.StoreObserverOption{},
 		StartOnCreation: true,
 	}
 
@@ -133,7 +127,7 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 		option(c)
 	}
 
-	if c.Store == nil {
+	if c.Observer == nil {
 		return nil, fmt.Errorf("store cannot be empty")
 	}
 	if c.Address == "" {
@@ -173,7 +167,14 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 }
 
 func (c *Courier) Start() error {
-	go observer.Observe(c.Observer)
+	observeChan := make(chan []node.Node)
+	newNodeChan := make(chan node.Node)
+	failedConnectionChan := make(chan node.Node)
+	blacklistNodes := NewNodeMap()
+	currentNodes := NewNodeMap()
+
+	go registerNodes(observeChan, newNodeChan, failedConnectionChan, blacklistNodes, currentNodes)
+
 	go client.ListenForSubscribers(c.Client)
 	go client.ListenForResponseInfo(c.Client)
 	go client.ListenForOutgoingMessages(c.Client)

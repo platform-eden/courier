@@ -1,4 +1,4 @@
-package observe
+package courier
 
 import (
 	"testing"
@@ -15,7 +15,7 @@ Expected Outcomes:
 - observe pipeline should be ran every n seconds based on interval
 - blacklist and current nodes should be updated after every observe pipeline
 *************************************************************/
-func TestObserve(t *testing.T) {
+func TestRegisterNodes(t *testing.T) {
 	type test struct {
 		blackListCount int
 		currentCount   int
@@ -53,7 +53,7 @@ func TestObserve(t *testing.T) {
 		blacklist := NewNodeMap()
 		current := NewNodeMap()
 
-		go Observe(ochan, nchan, fchan, blacklist, current)
+		go registerNodes(ochan, nchan, fchan, blacklist, current)
 
 		current.Add(*fn)
 		fchan <- *fn
@@ -75,7 +75,7 @@ func TestObserve(t *testing.T) {
 			count++
 		}
 
-		ochan <- removePointers(nodes)
+		ochan <- mocks.RemovePointers(nodes)
 		count = 0
 
 	nodeloop:
@@ -148,7 +148,7 @@ func TestUpdateNodes(t *testing.T) {
 		nodes = append(nodes, nn...)
 		nodeChannel := make(chan node.Node, tc.newNodeCount)
 
-		bll, cll := updateNodes(removePointers(nodes), nodeChannel, blacklist, current)
+		bll, cll := updateNodes(mocks.RemovePointers(nodes), nodeChannel, blacklist, current)
 		close(nodeChannel)
 
 		count := 0
@@ -408,14 +408,4 @@ func TestSendNodes(t *testing.T) {
 		t.Fatalf("expected receive message count to equal %v but got %v", nc, count)
 	}
 
-}
-
-func removePointers(nodes []*node.Node) []node.Node {
-	updated := []node.Node{}
-
-	for _, n := range nodes {
-		updated = append(updated, *n)
-	}
-
-	return updated
 }

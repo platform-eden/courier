@@ -53,3 +53,13 @@ func CreateTestNodes(count int, options *TestNodeOptions) []*node.Node {
 
 	return nodes
 }
+
+func RemovePointers(nodes []*node.Node) []node.Node {
+	updated := []node.Node{}
+
+	for _, n := range nodes {
+		updated = append(updated, *n)
+	}
+
+	return updated
+}

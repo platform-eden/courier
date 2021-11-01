@@ -1,4 +1,4 @@
-package observe
+package courier
 
 import (
 	"log"
@@ -6,9 +6,7 @@ import (
 	"github.com/platform-edn/courier/node"
 )
 
-// Starts a Goroutine that will begin comparing current nodes and what nodes the NodeStore has.  If the NodeStore updates,
-// it sends a new map of Nodes to each Node Channel listening to the Observer.
-func Observe(observeChannel <-chan []node.Node, newChannel chan node.Node, failedConnectionChannel <-chan node.Node, blacklist node.NodeMapper, current node.NodeMapper) {
+func registerNodes(observeChannel <-chan []node.Node, newChannel chan node.Node, failedConnectionChannel <-chan node.Node, blacklist NodeMapper, current NodeMapper) {
 	for {
 		select {
 		case nodes := <-observeChannel:
@@ -26,7 +24,7 @@ func Observe(observeChannel <-chan []node.Node, newChannel chan node.Node, faile
 	//close(newChannel)
 }
 
-func updateNodes(nodes []node.Node, nodeChannel chan node.Node, blacklist node.NodeMapper, current node.NodeMapper) ([]node.Node, []node.Node) {
+func updateNodes(nodes []node.Node, nodeChannel chan node.Node, blacklist NodeMapper, current NodeMapper) ([]node.Node, []node.Node) {
 	blacklisted := make(chan node.Node, blacklist.Length()+1)
 	active := make(chan node.Node, len(nodes)+1)
 
@@ -65,7 +63,7 @@ func generate(nodes ...node.Node) <-chan node.Node {
 
 // compareBlackList comapres incoming nodes to a map of nodes.  If the node is in the map, this function logs to output.
 // If a node does not exist in the blacklist, it is passed through the returned node channel.
-func compareBlackList(in <-chan node.Node, blacklisted chan node.Node, blacklist node.NodeMapper) <-chan node.Node {
+func compareBlackList(in <-chan node.Node, blacklisted chan node.Node, blacklist NodeMapper) <-chan node.Node {
 	out := make(chan node.Node)
 	go func() {
 		for n := range in {
@@ -90,7 +88,7 @@ func compareBlackList(in <-chan node.Node, blacklisted chan node.Node, blacklist
 
 // compareCurrentList compares nodes coming in to a map of nodes. All nodes passed in are passed out through the
 // active channel and all new nodes are passed through the returned node channel.
-func compareCurrentList(in <-chan node.Node, active chan node.Node, current node.NodeMapper) <-chan node.Node {
+func compareCurrentList(in <-chan node.Node, active chan node.Node, current NodeMapper) <-chan node.Node {
 	out := make(chan node.Node)
 	go func() {
 		for n := range in {

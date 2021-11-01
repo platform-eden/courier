@@ -1,4 +1,4 @@
-package observe
+package courier
 
 import (
 	"testing"
@@ -9,7 +9,7 @@ import (
 func TestNodeMap_Nodes(t *testing.T) {
 	l := 10
 	nodes := mocks.CreateTestNodes(l, &mocks.TestNodeOptions{})
-	b := NewNodeMap(removePointers(nodes)...)
+	b := NewNodeMap(mocks.RemovePointers(nodes)...)
 
 	for _, n := range nodes {
 		_, exist := b.nodes[n.Id]
