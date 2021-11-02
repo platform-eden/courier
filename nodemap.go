@@ -5,6 +5,15 @@ import (
 	"github.com/platform-edn/courier/node"
 )
 
+type NodeMapper interface {
+	Node(string) (node.Node, bool)
+	Nodes() map[string]node.Node
+	Update(...node.Node)
+	Add(node.Node)
+	Remove(string)
+	Length() int
+}
+
 type NodeMap struct {
 	nodes map[string]node.Node
 	lock  lock.Locker
@@ -32,6 +41,13 @@ func (nm *NodeMap) Node(id string) (node.Node, bool) {
 	return n, exist
 }
 
+func (nm *NodeMap) Nodes() map[string]node.Node {
+	nm.lock.Lock()
+	defer nm.lock.Unlock()
+
+	return nm.nodes
+}
+
 func (nm *NodeMap) Add(n node.Node) {
 	nm.lock.Lock()
 	defer nm.lock.Unlock()
@@ -53,6 +69,7 @@ func (nm *NodeMap) Update(nodes ...node.Node) {
 	new := map[string]node.Node{}
 
 	for _, n := range nodes {
+
 		new[n.Id] = n
 	}
 
