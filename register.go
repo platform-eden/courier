@@ -124,6 +124,7 @@ func sendNodes(in <-chan node.Node, nodeChannel chan node.Node, wg *sync.WaitGro
 	defer wg.Done()
 }
 
+// nodeBuffer takes a regular channel and returns a buffered channel
 func nodeBuffer(in <-chan node.Node, size int) <-chan node.Node {
 	out := make(chan node.Node, size)
 
