@@ -1,19 +1,13 @@
 package courier
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net"
-	"time"
 
 	"github.com/google/uuid"
-	"github.com/platform-edn/courier/client"
-	"github.com/platform-edn/courier/message"
 	"github.com/platform-edn/courier/node"
 	"github.com/platform-edn/courier/proto"
-	"github.com/platform-edn/courier/proxy"
-	"github.com/platform-edn/courier/server"
 	"google.golang.org/grpc"
 )
 
@@ -34,11 +28,11 @@ func Broadcasts(subjects ...string) CourierOption {
 	}
 }
 
-func WithNodeStore(store NodeStorer) CourierOption {
-	return func(c *Courier) {
-		c.Store = store
-	}
-}
+// // func WithNodeStore(store NodeStorer) CourierOption {
+// // 	return func(c *Courier) {
+// // 		c.Store = store
+// // 	}
+// // }
 
 // ListensOnAddress sets the address for the Courier service to be found on
 func ListensOnAddress(address string) CourierOption {
@@ -54,40 +48,40 @@ func ListensOnPort(port string) CourierOption {
 	}
 }
 
-// WithClientContext sets the context for gRPC connections in the client
-func WithClientContext(ctx context.Context) CourierOption {
-	return func(c *Courier) {
-		c.ClientOptions = append(c.ClientOptions, client.WithContext(ctx))
-	}
-}
+// // WithClientContext sets the context for gRPC connections in the client
+// func WithClientContext(ctx context.Context) CourierOption {
+// 	return func(c *Courier) {
+// 		c.ClientOptions = append(c.ClientOptions, client.WithContext(ctx))
+// 	}
+// }
 
-// WithDialOption sets the dial options for gRPC connections in the client
-func WithDialOptions(option ...grpc.DialOption) CourierOption {
-	return func(c *Courier) {
-		c.ClientOptions = append(c.ClientOptions, client.WithDialOptions(option...))
-	}
-}
+// // WithDialOption sets the dial options for gRPC connections in the client
+// func WithDialOptions(option ...grpc.DialOption) CourierOption {
+// 	return func(c *Courier) {
+// 		c.ClientOptions = append(c.ClientOptions, client.WithDialOptions(option...))
+// 	}
+// }
 
-// WithFailedMessageWaitInterval sets the time in between attempts to send a message
-func WithFailedMessageWaitInterval(interval time.Duration) CourierOption {
-	return func(c *Courier) {
-		c.ClientOptions = append(c.ClientOptions, client.WithFailedWaitInterval(interval))
-	}
-}
+// // WithFailedMessageWaitInterval sets the time in between attempts to send a message
+// func WithFailedMessageWaitInterval(interval time.Duration) CourierOption {
+// 	return func(c *Courier) {
+// 		c.ClientOptions = append(c.ClientOptions, client.WithFailedWaitInterval(interval))
+// 	}
+// }
 
-// WithMaxFailedMessageAttempts sets the max amount of attempts to send a message before blacklisting a node
-func WithMaxFailedMessageAttempts(attempts int) CourierOption {
-	return func(c *Courier) {
-		c.ClientOptions = append(c.ClientOptions, client.WithMaxFailedAttempts(attempts))
-	}
-}
+// // WithMaxFailedMessageAttempts sets the max amount of attempts to send a message before blacklisting a node
+// func WithMaxFailedMessageAttempts(attempts int) CourierOption {
+// 	return func(c *Courier) {
+// 		c.ClientOptions = append(c.ClientOptions, client.WithMaxFailedAttempts(attempts))
+// 	}
+// }
 
-// WithNodeStoreInterval sets the interval that the observer waits before attempting to refresh the current nodes in the Courier system
-func WithObserverInterval(interval time.Duration) CourierOption {
-	return func(c *Courier) {
-		c.ObserverOptions = append(c.ObserverOptions, observer.WithObserverInterval(interval))
-	}
-}
+// // WithNodeStoreInterval sets the interval that the observer waits before attempting to refresh the current nodes in the Courier system
+// func WithObserverInterval(interval time.Duration) CourierOption {
+// 	return func(c *Courier) {
+// 		// c.ObserverOptions = append(c.ObserverOptions, observer.WithObserverInterval(interval))
+// 	}
+// }
 
 // StartOnCreation tells the Courier service to start on creation or wait to be started.  Starts by default.
 func StartOnCreation(tf bool) CourierOption {
@@ -103,12 +97,12 @@ type Courier struct {
 	Port                string
 	SubscribedSubjects  []string
 	BroadcastedSubjects []string
-	Proxy               proxy.Proxyer
-	Observer            Observer
-	Client              client.Clienter
-	Server              server.Server
-	ClientOptions       []client.ClientOption
-	StartOnCreation     bool
+	// Proxy               proxy.Proxyer
+	// Observer            Observer
+	// Client              client.Clienter
+	// Server              server.Server
+	// ClientOptions       []client.ClientOption
+	StartOnCreation bool
 }
 
 // NewCourier creates a new Courier service
@@ -117,9 +111,9 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 	id := uuid.NewString()
 
 	c := &Courier{
-		Id:              id,
-		Port:            "8080",
-		ClientOptions:   []client.ClientOption{client.WithId(id)},
+		Id:   id,
+		Port: "8080",
+		// ClientOptions:   []client.ClientOption{client.WithId(id)},
 		StartOnCreation: true,
 	}
 
@@ -127,34 +121,25 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 		option(c)
 	}
 
-	if c.Observer == nil {
-		return nil, fmt.Errorf("store cannot be empty")
-	}
 	if c.Address == "" {
 		c.Address = localIp()
 	}
 
-	c.Server = server.NewMessageServer()
-	c.ClientOptions = append(c.ClientOptions, client.WithInfoChannel(c.Server.ResponseChannel()))
+	// c.Server = server.NewMessageServer()
+	// c.ClientOptions = append(c.ClientOptions, client.WithInfoChannel(c.Server.ResponseChannel()))
 
-	c.Observer, err = observer.NewStoreObserver(c.ObserverOptions...)
-	if err != nil {
-		return nil, fmt.Errorf("could not create Observer: %s", err)
-	}
-	c.ClientOptions = append(c.ClientOptions, client.WithFailedConnectionChannel(c.Observer.FailedConnectionChannel()))
-
-	c.Client, err = client.NewMessageClient(c.ClientOptions...)
-	if err != nil {
-		return nil, fmt.Errorf("could not create MessageClient: %s", err)
-	}
-	c.Proxy, err = proxy.NewMessageProxy(
-		proxy.WithMessageChannel(
-			c.Server.PushChannel(),
-		),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("could not create MessageProxy: %s", err)
-	}
+	// c.Client, err = client.NewMessageClient(c.ClientOptions...)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("could not create MessageClient: %s", err)
+	// }
+	// c.Proxy, err = proxy.NewMessageProxy(
+	// 	proxy.WithMessageChannel(
+	// 		c.Server.PushChannel(),
+	// 	),
+	// )
+	// if err != nil {
+	// 	return nil, fmt.Errorf("could not create MessageProxy: %s", err)
+	// }
 
 	if c.StartOnCreation {
 		err = c.Start()
@@ -167,39 +152,48 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 }
 
 func (c *Courier) Start() error {
-	observeChan := make(chan []node.Node)
-	newNodeChan := make(chan node.Node)
-	failedConnectionChan := make(chan node.Node)
+	ochan := make(chan []node.Node)
+	nchan := make(chan node.Node)
+	schan := make(chan node.Node)
+	fchan := make(chan node.Node)
+	rchan := make(chan node.ResponseInfo)
+
 	blacklistNodes := NewNodeMap()
 	currentNodes := NewNodeMap()
+	clientResponses := newResponseMap()
+	clientNodes := NewNodeMap()
+	clientSubscribers := newSubscriberMap()
 
-	go registerNodes(observeChan, newNodeChan, failedConnectionChan, blacklistNodes, currentNodes)
+	go registerNodes(ochan, nchan, schan, fchan, blacklistNodes, currentNodes)
+	go listenForResponseInfo(rchan, clientResponses)
+	go listenForNewNodes(nchan, clientNodes, clientSubscribers)
+	go listenForStaleNodes(schan, clientNodes, clientSubscribers)
 
-	go client.ListenForSubscribers(c.Client)
-	go client.ListenForResponseInfo(c.Client)
-	go client.ListenForOutgoingMessages(c.Client)
-	go proxy.ForwardMessages(c.Proxy)
-	go startMessageServer(c.Server.(proto.MessageServerServer), c.Port)
+	// go client.ListenForOutgoingMessages(c.Client)
+	// go proxy.ForwardMessages(c.Proxy)
+	// go startMessageServer(c.Server.(proto.MessageServerServer), c.Port)
 
-	n := node.NewNode(c.Id, c.Address, c.Port, c.SubscribedSubjects, c.BroadcastedSubjects)
+	// n := node.NewNode(c.Id, c.Address, c.Port, c.SubscribedSubjects, c.BroadcastedSubjects)
 
-	err := c.Store.AddNode(n)
-	if err != nil {
-		return fmt.Errorf("could not add node: %s", err)
-	}
+	// err := c.Store.AddNode(n)
+	// if err != nil {
+	// 	return fmt.Errorf("could not add node: %s", err)
+	// }
 
 	return nil
 }
 
-// Subscribe takes a subject and returns a channel that will receive messages that are sent on that channel
-func (c *Courier) Subscribe(subject string) chan message.Message {
-	return c.Proxy.Subscribe(subject)
-}
+func (c *Courier) Push() {}
 
-// PushChannel returns a channel that will take a message and send it to all services that are subscribed to it
-func (c *Courier) PushChannel(subject string) chan message.Message {
-	return c.Client.MessageChannel()
-}
+// Subscribe takes a subject and returns a channel that will receive messages that are sent on that channel
+// func (c *Courier) Subscribe(subject string) chan message.Message {
+// 	return c.Proxy.Subscribe(subject)
+// }
+
+// // PushChannel returns a channel that will take a message and send it to all services that are subscribed to it
+// func (c *Courier) PushChannel(subject string) chan message.Message {
+// 	return c.Client.MessageChannel()
+// }
 
 // localIP returns the ip address this node is currently using
 func localIp() string {
