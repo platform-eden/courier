@@ -3,6 +3,7 @@ package courier
 import (
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/platform-edn/courier/node"
 )
 
@@ -45,4 +46,36 @@ func TestResponseMap_PopResponse(t *testing.T) {
 		t.Fatalf("expected popping a nonexistant response to return an err but it passed")
 	}
 
+}
+
+/**************************************************************
+Expected Outcomes:
+- should return how many responseInfo structs are in the map
+**************************************************************/
+func Test(t *testing.T) {
+	type test struct {
+		count int
+	}
+
+	tests := []test{
+		{
+			count: 10,
+		},
+	}
+
+	for _, tc := range tests {
+		respMap := newResponseMap()
+		for i := 0; i < tc.count; i++ {
+			info := node.ResponseInfo{
+				NodeId:    uuid.NewString(),
+				MessageId: uuid.NewString(),
+			}
+
+			respMap.Push(info)
+		}
+
+		if respMap.Length() != tc.count {
+			t.Fatalf("expected response count to be %v but got %v", tc.count, respMap.Length())
+		}
+	}
 }

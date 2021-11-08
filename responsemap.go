@@ -46,3 +46,10 @@ func (r *responseMap) Pop(messageId string) (string, error) {
 
 	return nodeId, nil
 }
+
+func (r *responseMap) Length() int {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	return len(r.responses)
+}
