@@ -52,7 +52,7 @@ func TestResponseMap_PopResponse(t *testing.T) {
 Expected Outcomes:
 - should return how many responseInfo structs are in the map
 **************************************************************/
-func Test(t *testing.T) {
+func TestResponseMap_Length(t *testing.T) {
 	type test struct {
 		count int
 	}

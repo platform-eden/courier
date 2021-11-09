@@ -54,6 +54,7 @@ func TestMessageServer_PublishMessage(t *testing.T) {
 		rchan := make(chan node.ResponseInfo)
 		defer close(rchan)
 		chanMap := newChannelMap()
+		defer chanMap.Close()
 		mchan := chanMap.Add(tc.chanMapSubject)
 		server := NewMessageServer(rchan, chanMap)
 		errchan := make(chan error)
@@ -130,6 +131,7 @@ func TestMessageServer_ResponseMessage(t *testing.T) {
 		rchan := make(chan node.ResponseInfo)
 		defer close(rchan)
 		chanMap := newChannelMap()
+		defer chanMap.Close()
 		mchan := chanMap.Add(tc.chanMapSubject)
 		server := NewMessageServer(rchan, chanMap)
 		errchan := make(chan error)
@@ -206,6 +208,7 @@ func TestMessageServer_RequestMessage(t *testing.T) {
 	for _, tc := range tests {
 		rchan := make(chan node.ResponseInfo, 1)
 		chanMap := newChannelMap()
+		defer chanMap.Close()
 		mchan := chanMap.Add(tc.chanMapSubject)
 		server := NewMessageServer(rchan, chanMap)
 		errchan := make(chan error)
