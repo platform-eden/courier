@@ -1,7 +1,17 @@
-package message
+package courier
 
 import (
 	"github.com/google/uuid"
+)
+
+// the types of message that can be created
+// assigned based on what kind interaction the sender of the message wants with receiver
+type messageType int
+
+const (
+	PubMessage messageType = iota
+	ReqMessage
+	RespMessage
 )
 
 // Message to be sent between nodes
@@ -46,4 +56,14 @@ func NewRespMessage(id string, subject string, content []byte) Message {
 	}
 
 	return m
+}
+
+func (m messageType) String() string {
+	types := []string{
+		"PubMessage",
+		"RespMessage",
+		"ReqMessage",
+	}
+
+	return types[int(m)]
 }

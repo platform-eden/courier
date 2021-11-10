@@ -2,42 +2,39 @@ package courier
 
 import (
 	"fmt"
-
-	"github.com/platform-edn/courier/lock"
-	"github.com/platform-edn/courier/message"
 )
 
 type channelMapper interface {
-	Add(string) <-chan message.Message
-	Subscriptions(string) ([]chan message.Message, error)
+	Add(string) <-chan Message
+	Subscriptions(string) ([]chan Message, error)
 	Close()
 }
 
 type ChannelMap struct {
-	SubjectChannels map[string][]chan message.Message
-	Lock            lock.Locker
+	SubjectChannels map[string][]chan Message
+	Lock            Locker
 }
 
 func newChannelMap() *ChannelMap {
 	c := ChannelMap{
-		SubjectChannels: map[string][]chan message.Message{},
-		Lock:            lock.NewTicketLock(),
+		SubjectChannels: map[string][]chan Message{},
+		Lock:            NewTicketLock(),
 	}
 
 	return &c
 }
 
-func (c *ChannelMap) Add(subject string) <-chan message.Message {
+func (c *ChannelMap) Add(subject string) <-chan Message {
 	c.Lock.Lock()
 	defer c.Lock.Unlock()
 
-	newchan := make(chan message.Message)
+	newchan := make(chan Message)
 	c.SubjectChannels[subject] = append(c.SubjectChannels[subject], newchan)
 
 	return newchan
 }
 
-func (c *ChannelMap) Subscriptions(subject string) ([]chan message.Message, error) {
+func (c *ChannelMap) Subscriptions(subject string) ([]chan Message, error) {
 	c.Lock.Lock()
 	defer c.Lock.Unlock()
 

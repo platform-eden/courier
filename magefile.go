@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/magefile/mage/sh"
@@ -27,8 +28,9 @@ func getMageDir() string {
 
 // updates grpc boilerplate
 func Proto() error {
+	protopath := filepath.Join(baseDir, "protobuf_files")
 	// get files in proto path
-	files, err := ioutil.ReadDir(baseDir)
+	files, err := ioutil.ReadDir(protopath)
 	if err != nil {
 		return fmt.Errorf("could not get files in %s: %s", baseDir, err)
 	}
@@ -37,12 +39,12 @@ func Proto() error {
 	for _, file := range files {
 		if strings.HasSuffix(file.Name(), ".proto") {
 
-			err = sh.Run("protoc", "--proto_path="+baseDir, "--go-grpc_out=.", file.Name())
+			err = sh.Run("protoc", "--proto_path="+protopath, "--go-grpc_out=.", file.Name())
 			if err != nil {
 				return fmt.Errorf("could not create go proto files: %s", err)
 			}
 
-			err = sh.Run("protoc", "--proto_path="+baseDir, "--go_out=.", file.Name())
+			err = sh.Run("protoc", "--proto_path="+protopath, "--go_out=.", file.Name())
 			if err != nil {
 				return fmt.Errorf("could not create go proto files: %s", err)
 			}

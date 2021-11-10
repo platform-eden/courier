@@ -2,14 +2,12 @@ package courier
 
 import (
 	"testing"
-
-	"github.com/platform-edn/courier/mocks"
 )
 
 func TestNodeMap_Nodes(t *testing.T) {
 	l := 10
-	nodes := mocks.CreateTestNodes(l, &mocks.TestNodeOptions{})
-	b := NewNodeMap(mocks.RemovePointers(nodes)...)
+	nodes := CreateTestNodes(l, &TestNodeOptions{})
+	b := NewNodeMap(RemovePointers(nodes)...)
 
 	for _, n := range nodes {
 		_, exist := b.nodes[n.Id]
@@ -22,7 +20,7 @@ func TestNodeMap_Nodes(t *testing.T) {
 func TestNodeMap_Add(t *testing.T) {
 	b := NewNodeMap()
 	l := 10
-	nodes := mocks.CreateTestNodes(l, &mocks.TestNodeOptions{})
+	nodes := CreateTestNodes(l, &TestNodeOptions{})
 
 	for _, n := range nodes {
 		b.Add(*n)
@@ -38,7 +36,7 @@ func TestNodeMap_Add(t *testing.T) {
 func TestNodeMap_Remove(t *testing.T) {
 	b := NewNodeMap()
 	l := 10
-	nodes := mocks.CreateTestNodes(l, &mocks.TestNodeOptions{})
+	nodes := CreateTestNodes(l, &TestNodeOptions{})
 
 	for _, n := range nodes {
 		b.Add(*n)
@@ -58,7 +56,7 @@ func TestNodeMap_Remove(t *testing.T) {
 func TestNodeMap_Length(t *testing.T) {
 	b := NewNodeMap()
 	l := 10
-	nodes := mocks.CreateTestNodes(l, &mocks.TestNodeOptions{})
+	nodes := CreateTestNodes(l, &TestNodeOptions{})
 
 	for _, n := range nodes {
 		b.Add(*n)

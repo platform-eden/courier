@@ -7,8 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/platform-edn/courier/message"
-	"github.com/platform-edn/courier/node"
 	"github.com/platform-edn/courier/proto"
 	"google.golang.org/grpc"
 )
@@ -17,7 +15,7 @@ type courierClient struct {
 	client     proto.MessageServerClient
 	connection grpc.ClientConn
 	currentId  string
-	receiver   node.Node
+	receiver   Node
 }
 
 type attemptMetadata struct {
@@ -26,14 +24,14 @@ type attemptMetadata struct {
 }
 
 // listenForResponseInfo takes ResponseInfo through a channel and pushes them into a responseMap
-func listenForResponseInfo(responses chan node.ResponseInfo, respMap ResponseMapper) {
+func listenForResponseInfo(responses chan ResponseInfo, respMap ResponseMapper) {
 	for response := range responses {
 		respMap.Push(response)
 	}
 }
 
 // listenForNewNodes takes nodes passed through a channel and adds them to a NodeMapper and SubMapper
-func listenForNewNodes(nodeChannel chan node.Node, nodeMap NodeMapper, subMap SubMapper) {
+func listenForNewNodes(nodeChannel chan Node, nodeMap NodeMapper, subMap SubMapper) {
 	for n := range nodeChannel {
 		nodeMap.Add(n)
 		subMap.Add(n.Id, n.SubscribedSubjects...)
@@ -41,7 +39,7 @@ func listenForNewNodes(nodeChannel chan node.Node, nodeMap NodeMapper, subMap Su
 }
 
 // listenForStaleNodes takes nodes passed in and removes them from a NodeMapper and SubMapper
-func listenForStaleNodes(staleChannel chan node.Node, nodeMap NodeMapper, subMap SubMapper) {
+func listenForStaleNodes(staleChannel chan Node, nodeMap NodeMapper, subMap SubMapper) {
 	for n := range staleChannel {
 		nodeMap.Remove(n.Id)
 		subMap.Remove(n.Id, n.SubscribedSubjects...)
@@ -83,8 +81,8 @@ func generateIdsByMessage(messageId string, respMap ResponseMapper) (<-chan stri
 }
 
 // idToNodes takes a channel of ids and returns a channel of nodes based on the ids
-func idToNodes(in <-chan string, nodeMap NodeMapper) <-chan node.Node {
-	out := make(chan node.Node)
+func idToNodes(in <-chan string, nodeMap NodeMapper) <-chan Node {
+	out := make(chan Node)
 	go func() {
 		for id := range in {
 			n, exist := nodeMap.Node(id)
@@ -102,13 +100,14 @@ func idToNodes(in <-chan string, nodeMap NodeMapper) <-chan node.Node {
 }
 
 // nodeToCourierClients takes a channel of nodes and returns a channel of courierClients
-func nodeToCourierClients(in <-chan node.Node, id string, options ...grpc.DialOption) <-chan courierClient {
+func nodeToCourierClients(in <-chan Node, id string, options ...grpc.DialOption) <-chan courierClient {
 	out := make(chan courierClient)
 	go func() {
 		for n := range in {
 			conn, err := grpc.Dial(fmt.Sprintf("%s:%s", n.Address, n.Port), options...)
 			if err != nil {
 				log.Printf("skipping node %s - could not create connection at %s: %s", n.Id, fmt.Sprintf("%s:%s", n.Address, n.Port), err)
+				continue
 			}
 
 			cc := courierClient{
@@ -126,9 +125,9 @@ func nodeToCourierClients(in <-chan node.Node, id string, options ...grpc.DialOp
 	return out
 }
 
-// fanMessageAttempts takes a channel of courierClients and creates a goroutine for each to attempt a message.  Returns a channel that will return nodes that unsuccessfully sent a message
-func fanMessageAttempts(in <-chan courierClient, ctx context.Context, metadata attemptMetadata, msg message.Message, send sendFunc) chan node.Node {
-	out := make(chan node.Node)
+// fanMessageAttempts takes a channel of courierClients and creates a goroutine for each to attempt a   Returns a channel that will return nodes that unsuccessfully sent a message
+func fanMessageAttempts(in <-chan courierClient, ctx context.Context, metadata attemptMetadata, msg Message, send sendFunc) chan Node {
+	out := make(chan Node)
 
 	go func() {
 		wg := &sync.WaitGroup{}
@@ -146,7 +145,7 @@ func fanMessageAttempts(in <-chan courierClient, ctx context.Context, metadata a
 }
 
 // attemptMessage takes a send function and attempts it until it succeeds or has reached maxAttempts.  Waits between attempts depends on the given interval
-func attemptMessage(ctx context.Context, client courierClient, metadata attemptMetadata, msg message.Message, send sendFunc, nchan chan node.Node, wg *sync.WaitGroup) {
+func attemptMessage(ctx context.Context, client courierClient, metadata attemptMetadata, msg Message, send sendFunc, nchan chan Node, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	attempts := 0
@@ -165,7 +164,7 @@ func attemptMessage(ctx context.Context, client courierClient, metadata attemptM
 }
 
 // forwardFailedConnections takes a channel of nodes and sends them through a stale channel as well as a failed connection channel.  Returns a bool channel that receives true when it's done
-func forwardFailedConnections(in <-chan node.Node, fchan chan node.Node, schan chan node.Node) <-chan bool {
+func forwardFailedConnections(in <-chan Node, fchan chan Node, schan chan Node) <-chan bool {
 	out := make(chan bool)
 
 	go func() {
@@ -182,10 +181,10 @@ func forwardFailedConnections(in <-chan node.Node, fchan chan node.Node, schan c
 	return out
 }
 
-type sendFunc func(context.Context, message.Message, courierClient) error
+type sendFunc func(context.Context, Message, courierClient) error
 
-func sendPublishMessage(ctx context.Context, m message.Message, cc courierClient) error {
-	if m.Type != message.PubMessage {
+func sendPublishMessage(ctx context.Context, m Message, cc courierClient) error {
+	if m.Type != PubMessage {
 		return fmt.Errorf("message type must be of type PublishMessage")
 	}
 
@@ -203,8 +202,8 @@ func sendPublishMessage(ctx context.Context, m message.Message, cc courierClient
 	return nil
 }
 
-func sendRequestMessage(ctx context.Context, m message.Message, cc courierClient) error {
-	if m.Type != message.ReqMessage {
+func sendRequestMessage(ctx context.Context, m Message, cc courierClient) error {
+	if m.Type != ReqMessage {
 		return fmt.Errorf("message type must be of type RequestMessage")
 	}
 
@@ -223,8 +222,8 @@ func sendRequestMessage(ctx context.Context, m message.Message, cc courierClient
 	return nil
 }
 
-func sendResponseMessage(ctx context.Context, m message.Message, cc courierClient) error {
-	if m.Type != message.RespMessage {
+func sendResponseMessage(ctx context.Context, m Message, cc courierClient) error {
+	if m.Type != RespMessage {
 		return fmt.Errorf("message type must be of type ResponseMessage")
 	}
 	_, err := cc.client.ResponseMessage(ctx, &proto.ResponseMessageRequest{

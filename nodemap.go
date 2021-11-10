@@ -1,28 +1,23 @@
 package courier
 
-import (
-	"github.com/platform-edn/courier/lock"
-	"github.com/platform-edn/courier/node"
-)
-
 type NodeMapper interface {
-	Node(string) (node.Node, bool)
-	Nodes() map[string]node.Node
-	Update(...node.Node)
-	Add(node.Node)
+	Node(string) (Node, bool)
+	Nodes() map[string]Node
+	Update(...Node)
+	Add(Node)
 	Remove(string)
 	Length() int
 }
 
 type NodeMap struct {
-	nodes map[string]node.Node
-	lock  lock.Locker
+	nodes map[string]Node
+	lock  Locker
 }
 
-func NewNodeMap(nodes ...node.Node) *NodeMap {
+func NewNodeMap(nodes ...Node) *NodeMap {
 	nm := NodeMap{
-		nodes: map[string]node.Node{},
-		lock:  lock.NewTicketLock(),
+		nodes: map[string]Node{},
+		lock:  NewTicketLock(),
 	}
 
 	for _, n := range nodes {
@@ -32,7 +27,7 @@ func NewNodeMap(nodes ...node.Node) *NodeMap {
 	return &nm
 }
 
-func (nm *NodeMap) Node(id string) (node.Node, bool) {
+func (nm *NodeMap) Node(id string) (Node, bool) {
 	nm.lock.Lock()
 	defer nm.lock.Unlock()
 
@@ -41,14 +36,14 @@ func (nm *NodeMap) Node(id string) (node.Node, bool) {
 	return n, exist
 }
 
-func (nm *NodeMap) Nodes() map[string]node.Node {
+func (nm *NodeMap) Nodes() map[string]Node {
 	nm.lock.Lock()
 	defer nm.lock.Unlock()
 
 	return nm.nodes
 }
 
-func (nm *NodeMap) Add(n node.Node) {
+func (nm *NodeMap) Add(n Node) {
 	nm.lock.Lock()
 	defer nm.lock.Unlock()
 
@@ -62,11 +57,11 @@ func (nm *NodeMap) Remove(id string) {
 	delete(nm.nodes, id)
 }
 
-func (nm *NodeMap) Update(nodes ...node.Node) {
+func (nm *NodeMap) Update(nodes ...Node) {
 	nm.lock.Lock()
 	defer nm.lock.Unlock()
 
-	new := map[string]node.Node{}
+	new := map[string]Node{}
 
 	for _, n := range nodes {
 

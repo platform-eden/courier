@@ -1,4 +1,4 @@
-package node
+package courier
 
 type Node struct {
 	Id                  string

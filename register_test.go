@@ -4,9 +4,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/platform-edn/courier/mocks"
-	"github.com/platform-edn/courier/node"
 )
 
 /*************************************************************
@@ -42,16 +39,16 @@ func TestRegisterNodes(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		bln := mocks.CreateTestNodes(tc.blackListCount, &mocks.TestNodeOptions{})
-		cln := mocks.CreateTestNodes(tc.currentCount, &mocks.TestNodeOptions{})
-		nn := mocks.CreateTestNodes(tc.newNodeCount, &mocks.TestNodeOptions{})
+		bln := CreateTestNodes(tc.blackListCount, &TestNodeOptions{})
+		cln := CreateTestNodes(tc.currentCount, &TestNodeOptions{})
+		nn := CreateTestNodes(tc.newNodeCount, &TestNodeOptions{})
 		nodes := append(bln, cln...)
 		nodes = append(nodes, nn...)
-		fn := mocks.CreateTestNodes(1, &mocks.TestNodeOptions{})[0]
-		ochan := make(chan []node.Node)
-		nchan := make(chan node.Node)
-		schan := make(chan node.Node)
-		fchan := make(chan node.Node)
+		fn := CreateTestNodes(1, &TestNodeOptions{})[0]
+		ochan := make(chan []Node)
+		nchan := make(chan Node)
+		schan := make(chan Node)
+		fchan := make(chan Node)
 		blacklist := NewNodeMap()
 		current := NewNodeMap()
 
@@ -77,7 +74,7 @@ func TestRegisterNodes(t *testing.T) {
 			count++
 		}
 
-		ochan <- mocks.RemovePointers(nodes)
+		ochan <- RemovePointers(nodes)
 		count = 0
 
 	nodeloop:
@@ -132,11 +129,11 @@ func TestUpdateNodes(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		bln := mocks.CreateTestNodes(tc.blackListCount, &mocks.TestNodeOptions{})
-		cln := mocks.CreateTestNodes(tc.currentCount, &mocks.TestNodeOptions{})
-		nn := mocks.CreateTestNodes(tc.newNodeCount, &mocks.TestNodeOptions{})
-		snl := mocks.CreateTestNodes(tc.staleNodeCount, &mocks.TestNodeOptions{})
-		obln := mocks.CreateTestNodes(1, &mocks.TestNodeOptions{})[0]
+		bln := CreateTestNodes(tc.blackListCount, &TestNodeOptions{})
+		cln := CreateTestNodes(tc.currentCount, &TestNodeOptions{})
+		nn := CreateTestNodes(tc.newNodeCount, &TestNodeOptions{})
+		snl := CreateTestNodes(tc.staleNodeCount, &TestNodeOptions{})
+		obln := CreateTestNodes(1, &TestNodeOptions{})[0]
 
 		blacklist := NewNodeMap()
 		current := NewNodeMap()
@@ -156,10 +153,10 @@ func TestUpdateNodes(t *testing.T) {
 
 		nodes := append(bln, cln...)
 		nodes = append(nodes, nn...)
-		nodeChannel := make(chan node.Node, tc.newNodeCount)
-		staleChannel := make(chan node.Node, tc.staleNodeCount)
+		nodeChannel := make(chan Node, tc.newNodeCount)
+		staleChannel := make(chan Node, tc.staleNodeCount)
 
-		bll, cll := updateNodes(mocks.RemovePointers(nodes), nodeChannel, staleChannel, blacklist, current)
+		bll, cll := updateNodes(RemovePointers(nodes), nodeChannel, staleChannel, blacklist, current)
 		close(nodeChannel)
 		close(staleChannel)
 
@@ -213,8 +210,8 @@ func TestGenerate(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		nodes := mocks.CreateTestNodes(tc.count, &mocks.TestNodeOptions{})
-		out := generate(mocks.RemovePointers(nodes)...)
+		nodes := CreateTestNodes(tc.count, &TestNodeOptions{})
+		out := generate(RemovePointers(nodes)...)
 
 		count := 0
 		for range out {
@@ -260,15 +257,15 @@ func TestCompareBlackList(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		pn := mocks.CreateTestNodes(tc.blackListCount, &mocks.TestNodeOptions{})
+		pn := CreateTestNodes(tc.blackListCount, &TestNodeOptions{})
 		blacklist := NewNodeMap()
 		for _, n := range pn {
 			blacklist.Add(*n)
 		}
-		oldbln := mocks.CreateTestNodes(1, &mocks.TestNodeOptions{})[0]
-		in := make(chan node.Node)
-		blacklisted := make(chan node.Node, tc.blackListCount+tc.newNodeCount)
-		newNodes := mocks.CreateTestNodes(tc.newNodeCount, &mocks.TestNodeOptions{})
+		oldbln := CreateTestNodes(1, &TestNodeOptions{})[0]
+		in := make(chan Node)
+		blacklisted := make(chan Node, tc.blackListCount+tc.newNodeCount)
+		newNodes := CreateTestNodes(tc.newNodeCount, &TestNodeOptions{})
 
 		blacklist.Add(*oldbln)
 
@@ -284,7 +281,7 @@ func TestCompareBlackList(t *testing.T) {
 
 		out := compareBlackList(in, blacklisted, blacklist)
 
-		outNodes := []node.Node{}
+		outNodes := []Node{}
 		count := 0
 		for count != tc.newNodeCount {
 			select {
@@ -344,10 +341,10 @@ func TestCompareCurrentList(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		in := make(chan node.Node)
-		nodes := mocks.CreateTestNodes(tc.currentNodeCount, &mocks.TestNodeOptions{})
-		newNodes := mocks.CreateTestNodes(tc.newNodeCount, &mocks.TestNodeOptions{})
-		staleNodes := mocks.CreateTestNodes(tc.staleNodeCount, &mocks.TestNodeOptions{})
+		in := make(chan Node)
+		nodes := CreateTestNodes(tc.currentNodeCount, &TestNodeOptions{})
+		newNodes := CreateTestNodes(tc.newNodeCount, &TestNodeOptions{})
+		staleNodes := CreateTestNodes(tc.staleNodeCount, &TestNodeOptions{})
 		current := NewNodeMap()
 
 		for _, n := range nodes {
@@ -426,9 +423,9 @@ Expected Outcomes:
 **************************************************************/
 func TestSendNodes(t *testing.T) {
 	nc := 5
-	in := make(chan node.Node)
-	new := make(chan node.Node, nc)
-	nodes := mocks.CreateTestNodes(nc, &mocks.TestNodeOptions{})
+	in := make(chan Node)
+	new := make(chan Node, nc)
+	nodes := CreateTestNodes(nc, &TestNodeOptions{})
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
@@ -475,8 +472,8 @@ func TestNodeBuffer(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		nodes := mocks.CreateTestNodes(tc.size, &mocks.TestNodeOptions{})
-		in := make(chan node.Node)
+		nodes := CreateTestNodes(tc.size, &TestNodeOptions{})
+		in := make(chan Node)
 
 		out := nodeBuffer(in, tc.size)
 

@@ -2,31 +2,28 @@ package courier
 
 import (
 	"fmt"
-
-	"github.com/platform-edn/courier/lock"
-	"github.com/platform-edn/courier/node"
 )
 
 type ResponseMapper interface {
-	Push(node.ResponseInfo)
+	Push(ResponseInfo)
 	Pop(string) (string, error)
 }
 
 type responseMap struct {
 	responses map[string]string
-	lock      *lock.TicketLock
+	lock      *TicketLock
 }
 
 func newResponseMap() *responseMap {
 	r := responseMap{
 		responses: make(map[string]string),
-		lock:      lock.NewTicketLock(),
+		lock:      NewTicketLock(),
 	}
 
 	return &r
 }
 
-func (r *responseMap) Push(info node.ResponseInfo) {
+func (r *responseMap) Push(info ResponseInfo) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 

@@ -8,10 +8,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/platform-edn/courier/lock"
-	"github.com/platform-edn/courier/message"
-	"github.com/platform-edn/courier/mocks"
-	"github.com/platform-edn/courier/node"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
 )
@@ -32,12 +28,12 @@ func TestListenForResponseInfo(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		responses := []node.ResponseInfo{}
-		rchan := make(chan node.ResponseInfo)
+		responses := []ResponseInfo{}
+		rchan := make(chan ResponseInfo)
 		respMap := newResponseMap()
 
 		for i := 0; i < tc.responseCount; i++ {
-			info := node.ResponseInfo{
+			info := ResponseInfo{
 				MessageId: uuid.NewString(),
 				NodeId:    uuid.NewString(),
 			}
@@ -93,8 +89,8 @@ func TestListenForNewNodes(t *testing.T) {
 		nodeMap := NewNodeMap()
 		subMap := newSubscriberMap()
 		subjects := []string{"test", "test1", "test2"}
-		nodes := mocks.CreateTestNodes(tc.newNodes, &mocks.TestNodeOptions{SubscribedSubjects: subjects})
-		nchan := make(chan node.Node)
+		nodes := CreateTestNodes(tc.newNodes, &TestNodeOptions{SubscribedSubjects: subjects})
+		nchan := make(chan Node)
 
 		go listenForNewNodes(nchan, nodeMap, subMap)
 
@@ -105,7 +101,7 @@ func TestListenForNewNodes(t *testing.T) {
 
 		done := make(chan bool)
 
-		checkSubMap := func(nodes []*node.Node, smap *subscriberMap) bool {
+		checkSubMap := func(nodes []*Node, smap *subscriberMap) bool {
 			for _, n := range nodes {
 				for _, subject := range n.SubscribedSubjects {
 					exist := smap.CheckForSubscriber(subject, n.Id)
@@ -158,8 +154,8 @@ func TestListenForStaleNodes(t *testing.T) {
 		nodeMap := NewNodeMap()
 		subMap := newSubscriberMap()
 		subjects := []string{"test", "test1", "test2"}
-		nodes := mocks.CreateTestNodes(tc.staleNodes, &mocks.TestNodeOptions{SubscribedSubjects: subjects})
-		schan := make(chan node.Node)
+		nodes := CreateTestNodes(tc.staleNodes, &TestNodeOptions{SubscribedSubjects: subjects})
+		schan := make(chan Node)
 
 		for _, n := range nodes {
 			subMap.Add(n.Id, n.SubscribedSubjects...)
@@ -175,7 +171,7 @@ func TestListenForStaleNodes(t *testing.T) {
 
 		done := make(chan bool)
 
-		checkSubMap := func(nodes []*node.Node, smap *subscriberMap) bool {
+		checkSubMap := func(nodes []*Node, smap *subscriberMap) bool {
 			for _, n := range nodes {
 				for _, subject := range n.SubscribedSubjects {
 					exist := smap.CheckForSubscriber(subject, n.Id)
@@ -288,7 +284,7 @@ func TestGenerateIdsByMessage(t *testing.T) {
 		messages := []string{}
 
 		for i := 0; i < tc.messageCount; i++ {
-			info := node.ResponseInfo{
+			info := ResponseInfo{
 				MessageId: uuid.NewString(),
 				NodeId:    uuid.NewString(),
 			}
@@ -348,7 +344,7 @@ func TestIdToNodes(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		nodes := mocks.CreateTestNodes(tc.nodeCount, &mocks.TestNodeOptions{})
+		nodes := CreateTestNodes(tc.nodeCount, &TestNodeOptions{})
 		nodeMap := NewNodeMap()
 		in := make(chan string)
 		ids := []string{}
@@ -401,8 +397,8 @@ func TestNodeToCourierClients(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		nodes := mocks.CreateTestNodes(int(tc.nodeCount), &mocks.TestNodeOptions{})
-		in := make(chan node.Node)
+		nodes := CreateTestNodes(int(tc.nodeCount), &TestNodeOptions{})
+		in := make(chan Node)
 
 		go func() {
 			for _, n := range nodes {
@@ -457,8 +453,8 @@ func TestFanMessageAttempts(t *testing.T) {
 			waitInterval: time.Millisecond * 100,
 		}
 		ctx := context.Background()
-		msg := message.NewPubMessage("test", "test", []byte("test"))
-		nodes := mocks.CreateTestNodes(tc.clientCount, &mocks.TestNodeOptions{})
+		msg := NewPubMessage("test", "test", []byte("test"))
+		nodes := CreateTestNodes(tc.clientCount, &TestNodeOptions{})
 		in := make(chan courierClient, tc.clientCount)
 		// clients := {}
 		for _, n := range nodes {
@@ -471,8 +467,8 @@ func TestFanMessageAttempts(t *testing.T) {
 
 		fcount := 0
 		scount := 0
-		l := lock.NewTicketLock()
-		send := func(ctx context.Context, msg message.Message, client courierClient) error {
+		l := NewTicketLock()
+		send := func(ctx context.Context, msg Message, client courierClient) error {
 			fail := false
 			l.Lock()
 			scount++
@@ -535,12 +531,12 @@ func TestAttemptMessage(t *testing.T) {
 			waitInterval: time.Millisecond * 100,
 		}
 		ctx := context.Background()
-		msg := message.NewPubMessage("test", "test", []byte("test"))
-		nchan := make(chan node.Node, 1)
+		msg := NewPubMessage("test", "test", []byte("test"))
+		nchan := make(chan Node, 1)
 		client := courierClient{
-			receiver: *mocks.CreateTestNodes(1, &mocks.TestNodeOptions{})[0],
+			receiver: *CreateTestNodes(1, &TestNodeOptions{})[0],
 		}
-		send := func(ctx context.Context, msg message.Message, client courierClient) error {
+		send := func(ctx context.Context, msg Message, client courierClient) error {
 			if tc.expectedFailure == true {
 				return fmt.Errorf("failure!")
 			}
@@ -593,10 +589,10 @@ func TestForwardFailedMessages(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		schan := make(chan node.Node, tc.nodeCount)
-		fchan := make(chan node.Node, tc.nodeCount)
-		in := make(chan node.Node)
-		nodes := mocks.CreateTestNodes(tc.nodeCount, &mocks.TestNodeOptions{})
+		schan := make(chan Node, tc.nodeCount)
+		fchan := make(chan Node, tc.nodeCount)
+		in := make(chan Node)
+		nodes := CreateTestNodes(tc.nodeCount, &TestNodeOptions{})
 
 		out := forwardFailedConnections(in, fchan, schan)
 
@@ -642,32 +638,32 @@ Expected Outcomes:
 **************************************************************/
 func TestSendPublishMessage(t *testing.T) {
 	type test struct {
-		m               message.Message
+		m               Message
 		serverFailure   bool
 		expectedFailure bool
 	}
 
 	tests := []test{
 		{
-			m:               message.NewPubMessage(uuid.NewString(), "test", []byte("test")),
+			m:               NewPubMessage(uuid.NewString(), "test", []byte("test")),
 			serverFailure:   true,
 			expectedFailure: true,
 		},
 		{
-			m:               message.NewPubMessage(uuid.NewString(), "test", []byte("test")),
+			m:               NewPubMessage(uuid.NewString(), "test", []byte("test")),
 			serverFailure:   false,
 			expectedFailure: false,
 		},
 		{
-			m:               message.NewReqMessage(uuid.NewString(), "test", []byte("test")),
+			m:               NewReqMessage(uuid.NewString(), "test", []byte("test")),
 			serverFailure:   false,
 			expectedFailure: true,
 		},
 	}
 
 	for _, tc := range tests {
-		server := mocks.NewMockServer(bufconn.Listen(1024*1024), tc.serverFailure)
-		client, conn, err := mocks.NewLocalGRPCClient("bufnet", server.BufDialer)
+		server := NewMockServer(bufconn.Listen(1024*1024), tc.serverFailure)
+		client, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
 		if err != nil {
 			if tc.expectedFailure {
 				continue
@@ -680,7 +676,7 @@ func TestSendPublishMessage(t *testing.T) {
 			client:     client,
 			connection: *conn,
 			currentId:  uuid.NewString(),
-			receiver:   *mocks.CreateTestNodes(1, &mocks.TestNodeOptions{})[0],
+			receiver:   *CreateTestNodes(1, &TestNodeOptions{})[0],
 		}
 
 		err = sendPublishMessage(context.Background(), tc.m, cc)
@@ -705,32 +701,32 @@ Expected Outcomes:
 **************************************************************/
 func TestSendRequestMessage(t *testing.T) {
 	type test struct {
-		m               message.Message
+		m               Message
 		serverFailure   bool
 		expectedFailure bool
 	}
 
 	tests := []test{
 		{
-			m:               message.NewReqMessage(uuid.NewString(), "test", []byte("test")),
+			m:               NewReqMessage(uuid.NewString(), "test", []byte("test")),
 			serverFailure:   true,
 			expectedFailure: true,
 		},
 		{
-			m:               message.NewReqMessage(uuid.NewString(), "test", []byte("test")),
+			m:               NewReqMessage(uuid.NewString(), "test", []byte("test")),
 			serverFailure:   false,
 			expectedFailure: false,
 		},
 		{
-			m:               message.NewPubMessage(uuid.NewString(), "test", []byte("test")),
+			m:               NewPubMessage(uuid.NewString(), "test", []byte("test")),
 			serverFailure:   false,
 			expectedFailure: true,
 		},
 	}
 
 	for _, tc := range tests {
-		server := mocks.NewMockServer(bufconn.Listen(1024*1024), tc.serverFailure)
-		client, conn, err := mocks.NewLocalGRPCClient("bufnet", server.BufDialer)
+		server := NewMockServer(bufconn.Listen(1024*1024), tc.serverFailure)
+		client, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
 		if err != nil {
 			if tc.expectedFailure {
 				continue
@@ -743,7 +739,7 @@ func TestSendRequestMessage(t *testing.T) {
 			client:     client,
 			connection: *conn,
 			currentId:  uuid.NewString(),
-			receiver:   *mocks.CreateTestNodes(1, &mocks.TestNodeOptions{})[0],
+			receiver:   *CreateTestNodes(1, &TestNodeOptions{})[0],
 		}
 
 		err = sendRequestMessage(context.Background(), tc.m, cc)
@@ -768,32 +764,32 @@ Expected Outcomes:
 **************************************************************/
 func TestSendResponseMessage(t *testing.T) {
 	type test struct {
-		m               message.Message
+		m               Message
 		serverFailure   bool
 		expectedFailure bool
 	}
 
 	tests := []test{
 		{
-			m:               message.NewRespMessage(uuid.NewString(), "test", []byte("test")),
+			m:               NewRespMessage(uuid.NewString(), "test", []byte("test")),
 			serverFailure:   true,
 			expectedFailure: true,
 		},
 		{
-			m:               message.NewRespMessage(uuid.NewString(), "test", []byte("test")),
+			m:               NewRespMessage(uuid.NewString(), "test", []byte("test")),
 			serverFailure:   false,
 			expectedFailure: false,
 		},
 		{
-			m:               message.NewPubMessage(uuid.NewString(), "test", []byte("test")),
+			m:               NewPubMessage(uuid.NewString(), "test", []byte("test")),
 			serverFailure:   false,
 			expectedFailure: true,
 		},
 	}
 
 	for _, tc := range tests {
-		server := mocks.NewMockServer(bufconn.Listen(1024*1024), tc.serverFailure)
-		client, conn, err := mocks.NewLocalGRPCClient("bufnet", server.BufDialer)
+		server := NewMockServer(bufconn.Listen(1024*1024), tc.serverFailure)
+		client, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
 		if err != nil {
 			if tc.expectedFailure {
 				continue
@@ -806,7 +802,7 @@ func TestSendResponseMessage(t *testing.T) {
 			client:     client,
 			connection: *conn,
 			currentId:  uuid.NewString(),
-			receiver:   *mocks.CreateTestNodes(1, &mocks.TestNodeOptions{})[0],
+			receiver:   *CreateTestNodes(1, &TestNodeOptions{})[0],
 		}
 
 		err = sendResponseMessage(context.Background(), tc.m, cc)

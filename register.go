@@ -3,12 +3,10 @@ package courier
 import (
 	"log"
 	"sync"
-
-	"github.com/platform-edn/courier/node"
 )
 
 // registerNodes either receives new nodes to be sifted and sent out of the newChannel or receives nodes that could not receive a message that need to be blacklisted.
-func registerNodes(ochan <-chan []node.Node, nchan chan node.Node, schan chan node.Node, fchan <-chan node.Node, blacklist NodeMapper, current NodeMapper) {
+func registerNodes(ochan <-chan []Node, nchan chan Node, schan chan Node, fchan <-chan Node, blacklist NodeMapper, current NodeMapper) {
 	for {
 		select {
 		case nodes := <-ochan:
@@ -28,8 +26,8 @@ func registerNodes(ochan <-chan []node.Node, nchan chan node.Node, schan chan no
 }
 
 // updateNodes compares a list of nodes with blacklisted nodes and current nodes.  Any new nodes are sent through the nodeChannel.  Returns a new blacklist and current node list.
-func updateNodes(nodes []node.Node, nchan chan node.Node, schan chan node.Node, blacklist NodeMapper, current NodeMapper) (<-chan node.Node, <-chan node.Node) {
-	blacklisted := make(chan node.Node, blacklist.Length()+1)
+func updateNodes(nodes []Node, nchan chan Node, schan chan Node, blacklist NodeMapper, current NodeMapper) (<-chan Node, <-chan Node) {
+	blacklisted := make(chan Node, blacklist.Length()+1)
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 
@@ -47,8 +45,8 @@ func updateNodes(nodes []node.Node, nchan chan node.Node, schan chan node.Node, 
 }
 
 // generate takes a set of nodes and returns a channel of those nodes
-func generate(nodes ...node.Node) <-chan node.Node {
-	out := make(chan node.Node)
+func generate(nodes ...Node) <-chan Node {
+	out := make(chan Node)
 	go func() {
 		for _, n := range nodes {
 			out <- n
@@ -61,8 +59,8 @@ func generate(nodes ...node.Node) <-chan node.Node {
 
 // compareBlackList compares incoming nodes to a map of nodes.  If the node is in the map, this function logs to output.
 // If a node does not exist in the blacklist, it is passed through the returned node channel.
-func compareBlackList(in <-chan node.Node, blacklisted chan node.Node, blacklist NodeMapper) <-chan node.Node {
-	out := make(chan node.Node)
+func compareBlackList(in <-chan Node, blacklisted chan Node, blacklist NodeMapper) <-chan Node {
+	out := make(chan Node)
 	go func() {
 		for n := range in {
 			if blacklist.Length() != 0 {
@@ -86,10 +84,10 @@ func compareBlackList(in <-chan node.Node, blacklisted chan node.Node, blacklist
 
 // compareCurrentList compares nodes coming in to a map of nodes. All nodes passed in are passed out through the
 // active channel and all new nodes are passed through the returned node channel.
-func compareCurrentList(in <-chan node.Node, current NodeMapper) (<-chan node.Node, <-chan node.Node, <-chan node.Node) {
-	out := make(chan node.Node)
-	active := make(chan node.Node)
-	stale := make(chan node.Node)
+func compareCurrentList(in <-chan Node, current NodeMapper) (<-chan Node, <-chan Node, <-chan Node) {
+	out := make(chan Node)
+	active := make(chan Node)
+	stale := make(chan Node)
 	go func() {
 		for n := range in {
 			active <- n
@@ -116,7 +114,7 @@ func compareCurrentList(in <-chan node.Node, current NodeMapper) (<-chan node.No
 
 // sendNodes sends nodes passed to it out to the nodeChannel. Returns a channel that will return true once
 // the in channel is closed and sendNodes is complete
-func sendNodes(in <-chan node.Node, nodeChannel chan node.Node, wg *sync.WaitGroup) {
+func sendNodes(in <-chan Node, nodeChannel chan Node, wg *sync.WaitGroup) {
 	for n := range in {
 		nodeChannel <- n
 	}
@@ -125,8 +123,8 @@ func sendNodes(in <-chan node.Node, nodeChannel chan node.Node, wg *sync.WaitGro
 }
 
 // nodeBuffer takes a regular channel and returns a buffered channel
-func nodeBuffer(in <-chan node.Node, size int) <-chan node.Node {
-	out := make(chan node.Node, size)
+func nodeBuffer(in <-chan Node, size int) <-chan Node {
+	out := make(chan Node, size)
 
 	go func() {
 		for n := range in {

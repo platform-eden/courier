@@ -4,12 +4,11 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/platform-edn/courier/node"
 )
 
 func TestResponseMap_PushResponse(t *testing.T) {
 	responses := newResponseMap()
-	info := node.ResponseInfo{
+	info := ResponseInfo{
 		MessageId: "10",
 		NodeId:    "node",
 	}
@@ -27,7 +26,7 @@ func TestResponseMap_PushResponse(t *testing.T) {
 func TestResponseMap_PopResponse(t *testing.T) {
 	responses := newResponseMap()
 
-	info := node.ResponseInfo{
+	info := ResponseInfo{
 		MessageId: "10",
 		NodeId:    "node",
 	}
@@ -66,7 +65,7 @@ func TestResponseMap_Length(t *testing.T) {
 	for _, tc := range tests {
 		respMap := newResponseMap()
 		for i := 0; i < tc.count; i++ {
-			info := node.ResponseInfo{
+			info := ResponseInfo{
 				NodeId:    uuid.NewString(),
 				MessageId: uuid.NewString(),
 			}

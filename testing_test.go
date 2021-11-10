@@ -1,4 +1,4 @@
-package mocks
+package courier
 
 import (
 	"context"
@@ -106,4 +106,16 @@ func TestMockServer_RespMessage(t *testing.T) {
 		t.Fatalf("incorrect message slice size of %v", s.MessagesLength())
 	}
 
+}
+
+func TestNewMockClient(t *testing.T) {
+	lis := bufconn.Listen(1024 * 1024)
+	s := NewMockServer(lis, false)
+
+	_, conn, err := NewLocalGRPCClient("bufnet", s.BufDialer)
+	if err != nil {
+		t.Fatalf("could not create client: %s", err)
+	}
+
+	defer conn.Close()
 }

@@ -3,8 +3,6 @@ package courier
 import (
 	"fmt"
 	"sort"
-
-	"github.com/platform-edn/courier/lock"
 )
 
 type SubMapper interface {
@@ -15,13 +13,13 @@ type SubMapper interface {
 
 type subscriberMap struct {
 	subjectSubscribers map[string][]string
-	lock               *lock.TicketLock
+	lock               *TicketLock
 }
 
 func newSubscriberMap() *subscriberMap {
 	s := subscriberMap{
 		subjectSubscribers: map[string][]string{},
-		lock:               lock.NewTicketLock(),
+		lock:               NewTicketLock(),
 	}
 
 	return &s

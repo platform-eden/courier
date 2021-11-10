@@ -33,7 +33,7 @@ func NewMessageServerClient(cc grpc.ClientConnInterface) MessageServerClient {
 
 func (c *messageServerClient) PublishMessage(ctx context.Context, in *PublishMessageRequest, opts ...grpc.CallOption) (*PublishMessageResponse, error) {
 	out := new(PublishMessageResponse)
-	err := c.cc.Invoke(ctx, "/messenger.MessageServer/PublishMessage", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/courier.MessageServer/PublishMessage", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +42,7 @@ func (c *messageServerClient) PublishMessage(ctx context.Context, in *PublishMes
 
 func (c *messageServerClient) RequestMessage(ctx context.Context, in *RequestMessageRequest, opts ...grpc.CallOption) (*RequestMessageResponse, error) {
 	out := new(RequestMessageResponse)
-	err := c.cc.Invoke(ctx, "/messenger.MessageServer/RequestMessage", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/courier.MessageServer/RequestMessage", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (c *messageServerClient) RequestMessage(ctx context.Context, in *RequestMes
 
 func (c *messageServerClient) ResponseMessage(ctx context.Context, in *ResponseMessageRequest, opts ...grpc.CallOption) (*ResponseMessageResponse, error) {
 	out := new(ResponseMessageResponse)
-	err := c.cc.Invoke(ctx, "/messenger.MessageServer/ResponseMessage", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/courier.MessageServer/ResponseMessage", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func _MessageServer_PublishMessage_Handler(srv interface{}, ctx context.Context,
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/messenger.MessageServer/PublishMessage",
+		FullMethod: "/courier.MessageServer/PublishMessage",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MessageServerServer).PublishMessage(ctx, req.(*PublishMessageRequest))
@@ -122,7 +122,7 @@ func _MessageServer_RequestMessage_Handler(srv interface{}, ctx context.Context,
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/messenger.MessageServer/RequestMessage",
+		FullMethod: "/courier.MessageServer/RequestMessage",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MessageServerServer).RequestMessage(ctx, req.(*RequestMessageRequest))
@@ -140,7 +140,7 @@ func _MessageServer_ResponseMessage_Handler(srv interface{}, ctx context.Context
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/messenger.MessageServer/ResponseMessage",
+		FullMethod: "/courier.MessageServer/ResponseMessage",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MessageServerServer).ResponseMessage(ctx, req.(*ResponseMessageRequest))
@@ -152,7 +152,7 @@ func _MessageServer_ResponseMessage_Handler(srv interface{}, ctx context.Context
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var MessageServer_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "messenger.MessageServer",
+	ServiceName: "courier.MessageServer",
 	HandlerType: (*MessageServerServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

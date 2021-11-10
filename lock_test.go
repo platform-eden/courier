@@ -1,4 +1,4 @@
-package lock
+package courier
 
 import "testing"
 
@@ -41,7 +41,7 @@ func TestTicketLock_Unlock(t *testing.T) {
 	unlockNext := tl.next
 
 	if lockTicket != unlockTicket {
-		t.Fatalf("ticket should not increase after unlock. lockTicket: %v unlockTicket: %v", lockTicket, unlockTicket)
+		t.Fatalf("ticket should not increase after un lockTicket: %v unlockTicket: %v", lockTicket, unlockTicket)
 	}
 
 	if unlockNext-lockNext != 1 {

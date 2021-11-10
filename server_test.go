@@ -9,9 +9,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/platform-edn/courier/message"
-	"github.com/platform-edn/courier/mocks"
-	"github.com/platform-edn/courier/node"
 	"github.com/platform-edn/courier/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
@@ -51,7 +48,7 @@ func TestMessageServer_PublishMessage(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		rchan := make(chan node.ResponseInfo)
+		rchan := make(chan ResponseInfo)
 		defer close(rchan)
 		chanMap := newChannelMap()
 		defer chanMap.Close()
@@ -61,14 +58,15 @@ func TestMessageServer_PublishMessage(t *testing.T) {
 
 		go startTestServer(errchan, server)
 
-		client, conn, err := mocks.NewLocalGRPCClient("bufnet", bufDialer)
+		client, conn, err := NewLocalGRPCClient("bufnet", bufDialer)
 		if err != nil {
 			t.Fatalf("could not create client: %s", err)
 		}
 		defer conn.Close()
 
 		go func() {
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Millisecond*80))
+			defer cancel()
 			m := proto.PublishMessageRequest{
 				Message: &proto.PublishMessage{
 					Id:      uuid.NewString(),
@@ -128,7 +126,7 @@ func TestMessageServer_ResponseMessage(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		rchan := make(chan node.ResponseInfo)
+		rchan := make(chan ResponseInfo)
 		defer close(rchan)
 		chanMap := newChannelMap()
 		defer chanMap.Close()
@@ -138,14 +136,15 @@ func TestMessageServer_ResponseMessage(t *testing.T) {
 
 		go startTestServer(errchan, server)
 
-		client, conn, err := mocks.NewLocalGRPCClient("bufnet", bufDialer)
+		client, conn, err := NewLocalGRPCClient("bufnet", bufDialer)
 		if err != nil {
 			t.Fatalf("could not create client: %s", err)
 		}
 		defer conn.Close()
 
 		go func() {
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Millisecond*80))
+			defer cancel()
 			m := proto.ResponseMessageRequest{
 				Message: &proto.ResponseMessage{
 					Id:      uuid.NewString(),
@@ -206,7 +205,7 @@ func TestMessageServer_RequestMessage(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		rchan := make(chan node.ResponseInfo, 1)
+		rchan := make(chan ResponseInfo, 1)
 		chanMap := newChannelMap()
 		defer chanMap.Close()
 		mchan := chanMap.Add(tc.chanMapSubject)
@@ -215,14 +214,15 @@ func TestMessageServer_RequestMessage(t *testing.T) {
 
 		go startTestServer(errchan, server)
 
-		client, conn, err := mocks.NewLocalGRPCClient("bufnet", bufDialer)
+		client, conn, err := NewLocalGRPCClient("bufnet", bufDialer)
 		if err != nil {
 			t.Fatalf("could not create client: %s", err)
 		}
 		defer conn.Close()
 
 		go func() {
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Millisecond*80))
+			defer cancel()
 			m := proto.RequestMessageRequest{
 				Message: &proto.RequestMessage{
 					Id:      uuid.NewString(),
@@ -283,10 +283,10 @@ func TestGenerateMessageChannels(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		channels := []chan message.Message{}
+		channels := []chan Message{}
 
 		for i := 0; i < tc.channelCount; i++ {
-			channel := make(chan message.Message)
+			channel := make(chan Message)
 
 			channels = append(channels, channel)
 		}
@@ -321,11 +321,11 @@ func TestFanForwardMessages(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		mchan := make(chan message.Message, tc.channelCount)
-		cchan := make(chan chan message.Message)
-		m := message.NewPubMessage("test", "test", []byte("test"))
+		mchan := make(chan Message, tc.channelCount)
+		cchan := make(chan chan Message)
+		m := NewPubMessage("test", "test", []byte("test"))
 
-		forward := func(mchan chan message.Message, m message.Message, wg *sync.WaitGroup) {
+		forward := func(mchan chan Message, m Message, wg *sync.WaitGroup) {
 			defer wg.Done()
 			mchan <- m
 		}
@@ -357,8 +357,8 @@ Expected Outcomes:
 - message passed into the function should be sent through the channel passed in
 **************************************************************/
 func TestForwardMessage(t *testing.T) {
-	mchan := make(chan message.Message, 1)
-	m := message.NewPubMessage("test", "test", []byte("test"))
+	mchan := make(chan Message, 1)
+	m := NewPubMessage("test", "test", []byte("test"))
 	wg := &sync.WaitGroup{}
 
 	wg.Add(1)
