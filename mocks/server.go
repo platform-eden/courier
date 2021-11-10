@@ -2,6 +2,7 @@ package mocks
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 
@@ -18,15 +19,17 @@ type MockServer struct {
 	Responses []*node.ResponseInfo
 	Lis       *bufconn.Listener
 	proto.UnimplementedMessageServerServer
-	lock lock.Locker
+	lock       lock.Locker
+	shouldFail bool
 }
 
-func NewMockServer(listener *bufconn.Listener) *MockServer {
+func NewMockServer(listener *bufconn.Listener, fail bool) *MockServer {
 	s := MockServer{
-		Messages:  []*message.Message{},
-		Responses: []*node.ResponseInfo{},
-		Lis:       listener,
-		lock:      lock.NewTicketLock(),
+		Messages:   []*message.Message{},
+		Responses:  []*node.ResponseInfo{},
+		Lis:        listener,
+		lock:       lock.NewTicketLock(),
+		shouldFail: fail,
 	}
 
 	s.Start()
@@ -39,14 +42,10 @@ func (m *MockServer) Start() {
 
 	proto.RegisterMessageServerServer(grpcServer, m)
 
-	ok := make(chan bool)
-	defer close(ok)
-	err := make(chan error)
-	defer close(err)
-
 	go func() {
-		if e := grpcServer.Serve(m.Lis); err != nil {
-			log.Fatalf("server exited with error: %v", e)
+		err := grpcServer.Serve(m.Lis)
+		if err != nil {
+			log.Fatalf("server exited with error: %v", err)
 		}
 	}()
 }
@@ -58,6 +57,10 @@ func (m *MockServer) BufDialer(context.Context, string) (net.Conn, error) {
 func (m *MockServer) PublishMessage(ctx context.Context, request *proto.PublishMessageRequest) (*proto.PublishMessageResponse, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
+	if m.shouldFail {
+		return nil, fmt.Errorf("fail!")
+	}
+
 	pub := message.NewPubMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
 
 	m.Messages = append(m.Messages, &pub)
@@ -70,6 +73,9 @@ func (m *MockServer) PublishMessage(ctx context.Context, request *proto.PublishM
 func (m *MockServer) RequestMessage(ctx context.Context, request *proto.RequestMessageRequest) (*proto.RequestMessageResponse, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
+	if m.shouldFail {
+		return nil, fmt.Errorf("fail!")
+	}
 
 	req := message.NewReqMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
 	info := node.ResponseInfo{
@@ -88,6 +94,9 @@ func (m *MockServer) RequestMessage(ctx context.Context, request *proto.RequestM
 func (m *MockServer) ResponseMessage(ctx context.Context, request *proto.ResponseMessageRequest) (*proto.ResponseMessageResponse, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
+	if m.shouldFail {
+		return nil, fmt.Errorf("fail!")
+	}
 
 	resp := message.NewRespMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
 

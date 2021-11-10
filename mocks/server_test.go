@@ -11,7 +11,7 @@ import (
 
 func TestMockServer_Start(t *testing.T) {
 	lis := bufconn.Listen(1024 * 1024)
-	s := NewMockServer(lis)
+	s := NewMockServer(lis, false)
 
 	_, _, err := NewLocalGRPCClient("bufnet", s.BufDialer)
 	if err != nil {
@@ -21,7 +21,7 @@ func TestMockServer_Start(t *testing.T) {
 
 func TestMockServer_PublishMessage(t *testing.T) {
 	lis := bufconn.Listen(1024 * 1024)
-	s := NewMockServer(lis)
+	s := NewMockServer(lis, false)
 	ctx := context.Background()
 
 	client, conn, err := NewLocalGRPCClient("bufnet", s.BufDialer)
@@ -49,7 +49,7 @@ func TestMockServer_PublishMessage(t *testing.T) {
 
 func TestMockServer_ReqMessage(t *testing.T) {
 	lis := bufconn.Listen(1024 * 1024)
-	s := NewMockServer(lis)
+	s := NewMockServer(lis, false)
 	ctx := context.Background()
 
 	client, conn, err := NewLocalGRPCClient("bufnet", s.BufDialer)
@@ -82,7 +82,7 @@ func TestMockServer_ReqMessage(t *testing.T) {
 
 func TestMockServer_RespMessage(t *testing.T) {
 	lis := bufconn.Listen(1024 * 1024)
-	s := NewMockServer(lis)
+	s := NewMockServer(lis, false)
 	ctx := context.Background()
 
 	client, conn, err := NewLocalGRPCClient("bufnet", s.BufDialer)

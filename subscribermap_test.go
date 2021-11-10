@@ -132,7 +132,7 @@ func TestSubscriberMap_Subscribers(t *testing.T) {
 		if tc.expectedFailure {
 			_, err := subMap.Subscribers("failure")
 			if err != nil {
-				return
+				continue
 			}
 
 			t.Fatal("expected Subscribers to fail but it didn't")

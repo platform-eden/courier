@@ -86,7 +86,7 @@ func TestMessageServer_PublishMessage(t *testing.T) {
 		if tc.expectedFailure {
 			select {
 			case <-errchan:
-				return
+				continue
 			case <-time.After(time.Second * 3):
 				t.Fatal("PublishMessage didn't send err message in time")
 			}
@@ -163,7 +163,7 @@ func TestMessageServer_ResponseMessage(t *testing.T) {
 		if tc.expectedFailure {
 			select {
 			case <-errchan:
-				return
+				continue
 			case <-time.After(time.Second * 3):
 				t.Fatal("ResponseMessage didn't send err message in time")
 			}
@@ -240,7 +240,7 @@ func TestMessageServer_RequestMessage(t *testing.T) {
 		if tc.expectedFailure {
 			select {
 			case <-errchan:
-				return
+				continue
 			case <-time.After(time.Second * 3):
 				t.Fatal("RequestMessage didn't send err message in time")
 			}

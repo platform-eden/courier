@@ -13,6 +13,7 @@ import (
 	"github.com/platform-edn/courier/mocks"
 	"github.com/platform-edn/courier/node"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/test/bufconn"
 )
 
 /**************************************************************
@@ -410,7 +411,7 @@ func TestNodeToCourierClients(t *testing.T) {
 			close(in)
 		}()
 
-		out := nodeToCourierClients(in, grpc.WithInsecure())
+		out := nodeToCourierClients(in, uuid.NewString(), grpc.WithInsecure())
 
 		count := 0
 		for range out {
@@ -609,7 +610,6 @@ func TestForwardFailedMessages(t *testing.T) {
 
 		select {
 		case <-out:
-			break
 		case <-time.After(time.Second * 3):
 			t.Fatal("did not receive done")
 		}
@@ -631,5 +631,194 @@ func TestForwardFailedMessages(t *testing.T) {
 			t.Fatalf("mismatched counts: expected: %v, fchan: %v, schan: %v", tc.nodeCount, fcount, scount)
 		}
 
+	}
+}
+
+/**************************************************************
+Expected Outcomes:
+- should send a publish message to a grpc server successfully
+- returns error if the message was not sent successfully
+- returns error if message is not a publish message
+**************************************************************/
+func TestSendPublishMessage(t *testing.T) {
+	type test struct {
+		m               message.Message
+		serverFailure   bool
+		expectedFailure bool
+	}
+
+	tests := []test{
+		{
+			m:               message.NewPubMessage(uuid.NewString(), "test", []byte("test")),
+			serverFailure:   true,
+			expectedFailure: true,
+		},
+		{
+			m:               message.NewPubMessage(uuid.NewString(), "test", []byte("test")),
+			serverFailure:   false,
+			expectedFailure: false,
+		},
+		{
+			m:               message.NewReqMessage(uuid.NewString(), "test", []byte("test")),
+			serverFailure:   false,
+			expectedFailure: true,
+		},
+	}
+
+	for _, tc := range tests {
+		server := mocks.NewMockServer(bufconn.Listen(1024*1024), tc.serverFailure)
+		client, conn, err := mocks.NewLocalGRPCClient("bufnet", server.BufDialer)
+		if err != nil {
+			if tc.expectedFailure {
+				continue
+			}
+			t.Fatalf("could not creat client for server: %s", err)
+		}
+		defer conn.Close()
+
+		cc := courierClient{
+			client:     client,
+			connection: *conn,
+			currentId:  uuid.NewString(),
+			receiver:   *mocks.CreateTestNodes(1, &mocks.TestNodeOptions{})[0],
+		}
+
+		err = sendPublishMessage(context.Background(), tc.m, cc)
+		if err != nil {
+			if tc.expectedFailure {
+				continue
+			}
+			t.Fatalf("could not send message: %s", err)
+		}
+
+		if tc.expectedFailure {
+			t.Fatalf("sendPublishMessage was expected to fail but it didn't")
+		}
+	}
+}
+
+/**************************************************************
+Expected Outcomes:
+- should send a request message to a grpc server successfully
+- returns error if the message was not sent successfully
+- returns error if message is not a publish message
+**************************************************************/
+func TestSendRequestMessage(t *testing.T) {
+	type test struct {
+		m               message.Message
+		serverFailure   bool
+		expectedFailure bool
+	}
+
+	tests := []test{
+		{
+			m:               message.NewReqMessage(uuid.NewString(), "test", []byte("test")),
+			serverFailure:   true,
+			expectedFailure: true,
+		},
+		{
+			m:               message.NewReqMessage(uuid.NewString(), "test", []byte("test")),
+			serverFailure:   false,
+			expectedFailure: false,
+		},
+		{
+			m:               message.NewPubMessage(uuid.NewString(), "test", []byte("test")),
+			serverFailure:   false,
+			expectedFailure: true,
+		},
+	}
+
+	for _, tc := range tests {
+		server := mocks.NewMockServer(bufconn.Listen(1024*1024), tc.serverFailure)
+		client, conn, err := mocks.NewLocalGRPCClient("bufnet", server.BufDialer)
+		if err != nil {
+			if tc.expectedFailure {
+				continue
+			}
+			t.Fatalf("could not creat client for server: %s", err)
+		}
+		defer conn.Close()
+
+		cc := courierClient{
+			client:     client,
+			connection: *conn,
+			currentId:  uuid.NewString(),
+			receiver:   *mocks.CreateTestNodes(1, &mocks.TestNodeOptions{})[0],
+		}
+
+		err = sendRequestMessage(context.Background(), tc.m, cc)
+		if err != nil {
+			if tc.expectedFailure {
+				continue
+			}
+			t.Fatalf("could not send message: %s", err)
+		}
+
+		if tc.expectedFailure {
+			t.Fatalf("sendRequestMessage was expected to fail but it didn't")
+		}
+	}
+}
+
+/**************************************************************
+Expected Outcomes:
+- should send a request message to a grpc server successfully
+- returns error if the message was not sent successfully
+- returns error if message is not a publish message
+**************************************************************/
+func TestSendResponseMessage(t *testing.T) {
+	type test struct {
+		m               message.Message
+		serverFailure   bool
+		expectedFailure bool
+	}
+
+	tests := []test{
+		{
+			m:               message.NewRespMessage(uuid.NewString(), "test", []byte("test")),
+			serverFailure:   true,
+			expectedFailure: true,
+		},
+		{
+			m:               message.NewRespMessage(uuid.NewString(), "test", []byte("test")),
+			serverFailure:   false,
+			expectedFailure: false,
+		},
+		{
+			m:               message.NewPubMessage(uuid.NewString(), "test", []byte("test")),
+			serverFailure:   false,
+			expectedFailure: true,
+		},
+	}
+
+	for _, tc := range tests {
+		server := mocks.NewMockServer(bufconn.Listen(1024*1024), tc.serverFailure)
+		client, conn, err := mocks.NewLocalGRPCClient("bufnet", server.BufDialer)
+		if err != nil {
+			if tc.expectedFailure {
+				continue
+			}
+			t.Fatalf("could not creat client for server: %s", err)
+		}
+		defer conn.Close()
+
+		cc := courierClient{
+			client:     client,
+			connection: *conn,
+			currentId:  uuid.NewString(),
+			receiver:   *mocks.CreateTestNodes(1, &mocks.TestNodeOptions{})[0],
+		}
+
+		err = sendResponseMessage(context.Background(), tc.m, cc)
+		if err != nil {
+			if tc.expectedFailure {
+				continue
+			}
+			t.Fatalf("could not send message: %s", err)
+		}
+
+		if tc.expectedFailure {
+			t.Fatalf("sendResponseMessage was expected to fail but it didn't")
+		}
 	}
 }

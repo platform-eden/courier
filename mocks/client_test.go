@@ -8,7 +8,7 @@ import (
 
 func TestNewMockClient(t *testing.T) {
 	lis := bufconn.Listen(1024 * 1024)
-	s := NewMockServer(lis)
+	s := NewMockServer(lis, false)
 
 	_, conn, err := NewLocalGRPCClient("bufnet", s.BufDialer)
 	if err != nil {

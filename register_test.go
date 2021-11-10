@@ -214,18 +214,7 @@ func TestGenerate(t *testing.T) {
 
 	for _, tc := range tests {
 		nodes := mocks.CreateTestNodes(tc.count, &mocks.TestNodeOptions{})
-
-		removePointers := func(nodes []*node.Node) []node.Node {
-			updated := []node.Node{}
-
-			for _, n := range nodes {
-				updated = append(updated, *n)
-			}
-
-			return updated
-		}
-
-		out := generate(removePointers(nodes)...)
+		out := generate(mocks.RemovePointers(nodes)...)
 
 		count := 0
 		for range out {

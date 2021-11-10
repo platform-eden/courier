@@ -16,6 +16,7 @@ import (
 type courierClient struct {
 	client     proto.MessageServerClient
 	connection grpc.ClientConn
+	currentId  string
 	receiver   node.Node
 }
 
@@ -101,7 +102,7 @@ func idToNodes(in <-chan string, nodeMap NodeMapper) <-chan node.Node {
 }
 
 // nodeToCourierClients takes a channel of nodes and returns a channel of courierClients
-func nodeToCourierClients(in <-chan node.Node, options ...grpc.DialOption) <-chan courierClient {
+func nodeToCourierClients(in <-chan node.Node, id string, options ...grpc.DialOption) <-chan courierClient {
 	out := make(chan courierClient)
 	go func() {
 		for n := range in {
@@ -113,6 +114,7 @@ func nodeToCourierClients(in <-chan node.Node, options ...grpc.DialOption) <-cha
 			cc := courierClient{
 				client:     proto.NewMessageServerClient(conn),
 				connection: *conn,
+				currentId:  id,
 				receiver:   n,
 			}
 
@@ -123,8 +125,6 @@ func nodeToCourierClients(in <-chan node.Node, options ...grpc.DialOption) <-cha
 
 	return out
 }
-
-type sendFunc func(context.Context, message.Message, courierClient) error
 
 // fanMessageAttempts takes a channel of courierClients and creates a goroutine for each to attempt a message.  Returns a channel that will return nodes that unsuccessfully sent a message
 func fanMessageAttempts(in <-chan courierClient, ctx context.Context, metadata attemptMetadata, msg message.Message, send sendFunc) chan node.Node {
@@ -180,4 +180,63 @@ func forwardFailedConnections(in <-chan node.Node, fchan chan node.Node, schan c
 	}()
 
 	return out
+}
+
+type sendFunc func(context.Context, message.Message, courierClient) error
+
+func sendPublishMessage(ctx context.Context, m message.Message, cc courierClient) error {
+	if m.Type != message.PubMessage {
+		return fmt.Errorf("message type must be of type PublishMessage")
+	}
+
+	_, err := cc.client.PublishMessage(ctx, &proto.PublishMessageRequest{
+		Message: &proto.PublishMessage{
+			Id:      m.Id,
+			Subject: m.Subject,
+			Content: m.Content,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("could not send message: %s", err)
+	}
+
+	return nil
+}
+
+func sendRequestMessage(ctx context.Context, m message.Message, cc courierClient) error {
+	if m.Type != message.ReqMessage {
+		return fmt.Errorf("message type must be of type RequestMessage")
+	}
+
+	_, err := cc.client.RequestMessage(ctx, &proto.RequestMessageRequest{
+		Message: &proto.RequestMessage{
+			Id:      m.Id,
+			NodeId:  cc.receiver.Id,
+			Subject: m.Subject,
+			Content: m.Content,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("could not send message: %s", err)
+	}
+
+	return nil
+}
+
+func sendResponseMessage(ctx context.Context, m message.Message, cc courierClient) error {
+	if m.Type != message.RespMessage {
+		return fmt.Errorf("message type must be of type ResponseMessage")
+	}
+	_, err := cc.client.ResponseMessage(ctx, &proto.ResponseMessageRequest{
+		Message: &proto.ResponseMessage{
+			Id:      m.Id,
+			Subject: m.Subject,
+			Content: m.Content,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("could not send message: %s", err)
+	}
+
+	return nil
 }
