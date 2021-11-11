@@ -2,19 +2,12 @@ package courier
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log"
-	"net"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/platform-edn/courier/client"
-	"github.com/platform-edn/courier/message"
-	"github.com/platform-edn/courier/node"
-	"github.com/platform-edn/courier/observer"
 	"github.com/platform-edn/courier/proto"
-	"github.com/platform-edn/courier/proxy"
-	"github.com/platform-edn/courier/server"
 	"google.golang.org/grpc"
 )
 
@@ -25,7 +18,6 @@ type CourierOption func(c *Courier)
 func Subscribes(subjects ...string) CourierOption {
 	return func(c *Courier) {
 		c.SubscribedSubjects = subjects
-		c.ObserverOptions = append(c.ObserverOptions, observer.WithSubjects(subjects))
 	}
 }
 
@@ -36,22 +28,15 @@ func Broadcasts(subjects ...string) CourierOption {
 	}
 }
 
-func WithNodeStore(store observer.NodeStorer) CourierOption {
-	return func(c *Courier) {
-		c.Store = store
-		c.ObserverOptions = append(c.ObserverOptions, observer.WithNodeStorer(store))
-	}
-}
-
 // ListensOnAddress sets the address for the Courier service to be found on
-func ListensOnAddress(address string) CourierOption {
+func WithHostname(hostname string) CourierOption {
 	return func(c *Courier) {
-		c.Address = address
+		c.Hostname = hostname
 	}
 }
 
 // ListensOnPort sets the port for the Courier service to serve on
-func ListensOnPort(port string) CourierOption {
+func WithPort(port string) CourierOption {
 	return func(c *Courier) {
 		c.Port = port
 	}
@@ -60,35 +45,35 @@ func ListensOnPort(port string) CourierOption {
 // WithClientContext sets the context for gRPC connections in the client
 func WithClientContext(ctx context.Context) CourierOption {
 	return func(c *Courier) {
-		c.ClientOptions = append(c.ClientOptions, client.WithContext(ctx))
+		c.ClientContext = ctx
+	}
+}
+
+// WithObserver sets what Observer will be looking for nodes
+func WithObserver(observer Observer) CourierOption {
+	return func(c *Courier) {
+		c.Observer = observer
 	}
 }
 
 // WithDialOption sets the dial options for gRPC connections in the client
 func WithDialOptions(option ...grpc.DialOption) CourierOption {
 	return func(c *Courier) {
-		c.ClientOptions = append(c.ClientOptions, client.WithDialOptions(option...))
+		c.DialOptions = append(c.DialOptions, option...)
 	}
 }
 
 // WithFailedMessageWaitInterval sets the time in between attempts to send a message
 func WithFailedMessageWaitInterval(interval time.Duration) CourierOption {
 	return func(c *Courier) {
-		c.ClientOptions = append(c.ClientOptions, client.WithFailedWaitInterval(interval))
+		c.attemptMetadata.waitInterval = interval
 	}
 }
 
 // WithMaxFailedMessageAttempts sets the max amount of attempts to send a message before blacklisting a node
 func WithMaxFailedMessageAttempts(attempts int) CourierOption {
 	return func(c *Courier) {
-		c.ClientOptions = append(c.ClientOptions, client.WithMaxFailedAttempts(attempts))
-	}
-}
-
-// WithNodeStoreInterval sets the interval that the observer waits before attempting to refresh the current nodes in the Courier system
-func WithObserverInterval(interval time.Duration) CourierOption {
-	return func(c *Courier) {
-		c.ObserverOptions = append(c.ObserverOptions, observer.WithObserverInterval(interval))
+		c.attemptMetadata.maxAttempts = attempts
 	}
 }
 
@@ -101,69 +86,80 @@ func StartOnCreation(tf bool) CourierOption {
 
 // Courier is a messaging and node discovery service
 type Courier struct {
-	Id                  string
-	Address             string
-	Port                string
-	SubscribedSubjects  []string
-	BroadcastedSubjects []string
-	Store               observer.NodeStorer
-	Proxy               proxy.Proxyer
-	Observer            observer.Observer
-	Client              client.Clienter
-	Server              server.Server
-	ClientOptions       []client.ClientOption
-	ObserverOptions     []observer.StoreObserverOption
-	StartOnCreation     bool
+	Id                      string
+	Hostname                string
+	Port                    string
+	SubscribedSubjects      []string
+	BroadcastedSubjects     []string
+	Observer                Observer
+	attemptMetadata         attemptMetadata
+	ClientContext           context.Context
+	DialOptions             []grpc.DialOption
+	observerChannel         chan []Node
+	newNodeChannel          chan Node
+	staleNodeChannel        chan Node
+	failedConnectionChannel chan Node
+	responseChannel         chan ResponseInfo
+	blacklistNodes          NodeMapper
+	currentNodes            NodeMapper
+	clientNodes             NodeMapper
+	clientSubscribers       SubMapper
+	responses               ResponseMapper
+	internalSubChannels     channelMapper
+	server                  *grpc.Server
+	StartOnCreation         bool
 }
 
 // NewCourier creates a new Courier service
 func NewCourier(options ...CourierOption) (*Courier, error) {
-	var err error
-	id := uuid.NewString()
-
 	c := &Courier{
-		Id:              id,
-		Port:            "8080",
-		ClientOptions:   []client.ClientOption{client.WithId(id)},
-		ObserverOptions: []observer.StoreObserverOption{},
-		StartOnCreation: true,
+		Id:                  uuid.NewString(),
+		Port:                "8080",
+		SubscribedSubjects:  []string{},
+		BroadcastedSubjects: []string{},
+		attemptMetadata: attemptMetadata{
+			maxAttempts:  3,
+			waitInterval: time.Second,
+		},
+		ClientContext:           context.TODO(),
+		DialOptions:             []grpc.DialOption{},
+		Observer:                nil,
+		observerChannel:         make(chan []Node),
+		newNodeChannel:          make(chan Node),
+		staleNodeChannel:        make(chan Node),
+		failedConnectionChannel: make(chan Node),
+		responseChannel:         make(chan ResponseInfo),
+		blacklistNodes:          NewNodeMap(),
+		currentNodes:            NewNodeMap(),
+		clientNodes:             NewNodeMap(),
+		clientSubscribers:       newSubscriberMap(),
+		responses:               newResponseMap(),
+		internalSubChannels:     newChannelMap(),
+		StartOnCreation:         true,
 	}
 
 	for _, option := range options {
 		option(c)
 	}
 
-	if c.Store == nil {
-		return nil, fmt.Errorf("store cannot be empty")
-	}
-	if c.Address == "" {
-		c.Address = localIp()
+	if c.Observer == nil {
+		return nil, errors.New("observer must be set")
 	}
 
-	c.Server = server.NewMessageServer()
-	c.ClientOptions = append(c.ClientOptions, client.WithInfoChannel(c.Server.ResponseChannel()))
+	if c.Hostname == "" {
+		c.Hostname = localIp()
+	}
 
-	c.Observer, err = observer.NewStoreObserver(c.ObserverOptions...)
-	if err != nil {
-		return nil, fmt.Errorf("could not create Observer: %s", err)
+	if len(c.DialOptions) == 0 {
+		c.DialOptions = append(c.DialOptions, grpc.WithInsecure())
 	}
-	c.ClientOptions = append(c.ClientOptions, client.WithFailedConnectionChannel(c.Observer.FailedConnectionChannel()))
 
-	c.Client, err = client.NewMessageClient(c.ClientOptions...)
-	if err != nil {
-		return nil, fmt.Errorf("could not create MessageClient: %s", err)
-	}
-	c.Proxy, err = proxy.NewMessageProxy(
-		proxy.WithMessageChannel(
-			c.Server.PushChannel(),
-		),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("could not create MessageProxy: %s", err)
-	}
+	grpcServer := grpc.NewServer()
+	proto.RegisterMessageServerServer(grpcServer, NewMessageServer(c.responseChannel, c.internalSubChannels))
+	c.server = grpcServer
 
 	if c.StartOnCreation {
-		err = c.Start()
+		err := c.Start()
 		if err != nil {
 			return nil, fmt.Errorf("could not start Courier service: %s", err)
 		}
@@ -173,16 +169,19 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 }
 
 func (c *Courier) Start() error {
-	go observer.Observe(c.Observer)
-	go client.ListenForSubscribers(c.Client)
-	go client.ListenForResponseInfo(c.Client)
-	go client.ListenForOutgoingMessages(c.Client)
-	go proxy.ForwardMessages(c.Proxy)
-	go startMessageServer(c.Server.(proto.MessageServerServer), c.Port)
+	go registerNodes(c.observerChannel, c.newNodeChannel, c.staleNodeChannel, c.failedConnectionChannel, c.blacklistNodes, c.currentNodes)
+	go listenForResponseInfo(c.responseChannel, c.responses)
+	go listenForNewNodes(c.newNodeChannel, c.clientNodes, c.clientSubscribers)
+	go listenForStaleNodes(c.staleNodeChannel, c.clientNodes, c.clientSubscribers)
 
-	n := node.NewNode(c.Id, c.Address, c.Port, c.SubscribedSubjects, c.BroadcastedSubjects)
+	err := startMessageServer(c.server, c.Port)
+	if err != nil {
+		return fmt.Errorf("could not start server %s", err)
+	}
 
-	err := c.Store.AddNode(n)
+	n := NewNode(c.Id, c.Hostname, c.Port, c.SubscribedSubjects, c.BroadcastedSubjects)
+
+	err = c.Observer.AddNode(n)
 	if err != nil {
 		return fmt.Errorf("could not add node: %s", err)
 	}
@@ -190,44 +189,60 @@ func (c *Courier) Start() error {
 	return nil
 }
 
-// Subscribe takes a subject and returns a channel that will receive messages that are sent on that channel
-func (c *Courier) Subscribe(subject string) chan message.Message {
-	return c.Proxy.Subscribe(subject)
+func (c *Courier) Stop() {
+	c.server.GracefulStop()
 }
 
-// PushChannel returns a channel that will take a message and send it to all services that are subscribed to it
-func (c *Courier) PushChannel(subject string) chan message.Message {
-	return c.Client.MessageChannel()
-}
-
-// localIP returns the ip address this node is currently using
-func localIp() string {
-	conn, err := net.Dial("udp", "8.8.8.8:80")
+func (c *Courier) Push(m Message) error {
+	ids, err := generateIdsBySubject(m.Subject, c.clientSubscribers)
 	if err != nil {
-		log.Fatal(err)
-	}
-	defer conn.Close()
-
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
-
-	return localAddr.IP.String()
-}
-
-// startMessageServer starts the message server on a given port
-func startMessageServer(m proto.MessageServerServer, port string) error {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
-	if err != nil {
-		return fmt.Errorf("could not listen on port %s: %s", port, err)
+		return fmt.Errorf("couldn't generate ids: %s", err)
 	}
 
-	grpcServer := grpc.NewServer()
+	nodes := idToNodes(ids, c.clientNodes)
+	clients := nodeToCourierClients(nodes, c.Id, c.DialOptions...)
+	failed := fanMessageAttempts(clients, c.ClientContext, c.attemptMetadata, m, sendPublishMessage)
+	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
 
-	proto.RegisterMessageServerServer(grpcServer, m)
-
-	err = grpcServer.Serve(lis)
-	if err != nil {
-		return fmt.Errorf("failed serving: %s", err)
-	}
+	<-done
 
 	return nil
+}
+
+func (c *Courier) Request(m Message) error {
+	ids, err := generateIdsByMessage(m.Id, c.responses)
+	if err != nil {
+		return fmt.Errorf("couldn't generate ids: %s", err)
+	}
+
+	nodes := idToNodes(ids, c.clientNodes)
+	clients := nodeToCourierClients(nodes, c.Id, c.DialOptions...)
+	failed := fanMessageAttempts(clients, c.ClientContext, c.attemptMetadata, m, sendRequestMessage)
+	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
+
+	<-done
+
+	return nil
+}
+
+func (c *Courier) Response(m Message) error {
+	ids, err := generateIdsBySubject(m.Subject, c.clientSubscribers)
+	if err != nil {
+		return fmt.Errorf("couldn't generate ids: %s", err)
+	}
+
+	nodes := idToNodes(ids, c.clientNodes)
+	clients := nodeToCourierClients(nodes, c.Id, c.DialOptions...)
+	failed := fanMessageAttempts(clients, c.ClientContext, c.attemptMetadata, m, sendResponseMessage)
+	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
+
+	<-done
+
+	return nil
+}
+
+func (c *Courier) Subscribe(subject string) <-chan Message {
+	channel := c.internalSubChannels.Add(subject)
+
+	return channel
 }
