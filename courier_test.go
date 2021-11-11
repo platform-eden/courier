@@ -20,6 +20,7 @@ func TestNewCourier(t *testing.T) {
 		observer        Observer
 		dialOptions     []grpc.DialOption
 		hostname        string
+		port            string
 		startOnCreation bool
 		expectedFailure bool
 	}
@@ -29,6 +30,7 @@ func TestNewCourier(t *testing.T) {
 			observer:        newMockObserver(make(chan []Node), false),
 			dialOptions:     []grpc.DialOption{grpc.WithInsecure()},
 			hostname:        "test",
+			port:            "3000",
 			startOnCreation: true,
 			expectedFailure: false,
 		},
@@ -36,6 +38,7 @@ func TestNewCourier(t *testing.T) {
 			observer:        nil,
 			dialOptions:     []grpc.DialOption{grpc.WithInsecure()},
 			hostname:        "test",
+			port:            "3001",
 			startOnCreation: false,
 			expectedFailure: true,
 		},
@@ -43,6 +46,7 @@ func TestNewCourier(t *testing.T) {
 			observer:        newMockObserver(make(chan []Node), false),
 			dialOptions:     []grpc.DialOption{grpc.WithInsecure()},
 			hostname:        "",
+			port:            "3002",
 			startOnCreation: true,
 			expectedFailure: false,
 		},
@@ -50,6 +54,7 @@ func TestNewCourier(t *testing.T) {
 			observer:        newMockObserver(make(chan []Node), false),
 			dialOptions:     []grpc.DialOption{},
 			hostname:        "test",
+			port:            "3003",
 			startOnCreation: true,
 			expectedFailure: false,
 		},
@@ -57,6 +62,7 @@ func TestNewCourier(t *testing.T) {
 			observer:        newMockObserver(make(chan []Node), true),
 			dialOptions:     []grpc.DialOption{grpc.WithInsecure()},
 			hostname:        "test",
+			port:            "3004",
 			startOnCreation: true,
 			expectedFailure: true,
 		},
@@ -71,7 +77,7 @@ func TestNewCourier(t *testing.T) {
 			Subscribes(sub...),
 			Broadcasts(broad...),
 			WithHostname(tc.hostname),
-			WithPort("3000"),
+			WithPort(tc.port),
 			WithClientContext(context.Background()),
 			WithDialOptions(tc.dialOptions...),
 			WithFailedMessageWaitInterval(time.Second),
@@ -99,7 +105,6 @@ func TestNewCourier(t *testing.T) {
 			t.Fatal("expected test to fail but it passed")
 		}
 
-		time.Sleep(time.Millisecond * 100)
 		c.Stop()
 	}
 }
