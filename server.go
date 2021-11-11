@@ -126,21 +126,19 @@ func localIp() string {
 	return localAddr.IP.String()
 }
 
-func getListener(port string) (net.Listener, error) {
+// startMessageServer starts the message server on a given port
+func startMessageServer(grpcServer *grpc.Server, port string) error {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {
-		return nil, fmt.Errorf("could not listen on port %s: %s", port, err)
+		return fmt.Errorf("could not listen on port %s: %s", port, err)
 	}
 
-	return lis, nil
-}
+	go func() {
+		err = grpcServer.Serve(lis)
+		if err != nil {
+			log.Printf("stopped serving grpc: %s", err)
+		}
+	}()
 
-// startMessageServer starts the message server on a given port
-func startMessageServer(m proto.MessageServerServer, lis net.Listener) {
-	grpcServer := grpc.NewServer()
-	proto.RegisterMessageServerServer(grpcServer, m)
-	err := grpcServer.Serve(lis)
-	if err != nil {
-		log.Fatalf("error serving grpc: %s", err)
-	}
+	return nil
 }

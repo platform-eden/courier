@@ -2,6 +2,7 @@ package courier
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -186,4 +187,42 @@ func NewLocalGRPCClient(target string, bufDialer func(context.Context, string) (
 
 	return client, conn, nil
 
+}
+
+type MockObserver struct {
+	observeChannel chan []Node
+	fail           bool
+}
+
+func newMockObserver(ochan chan []Node, fail bool) *MockObserver {
+	o := MockObserver{
+		observeChannel: ochan,
+		fail:           fail,
+	}
+
+	return &o
+}
+
+func (o *MockObserver) Observe() (chan []Node, error) {
+	if o.fail {
+		return nil, errors.New("fail")
+	}
+
+	return o.observeChannel, nil
+}
+
+func (o *MockObserver) AddNode(*Node) error {
+	if o.fail {
+		return errors.New("fail")
+	}
+
+	return nil
+}
+
+func (o *MockObserver) RemoveNode(*Node) error {
+	if o.fail {
+		return errors.New("fail")
+	}
+
+	return nil
 }

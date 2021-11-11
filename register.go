@@ -5,6 +5,12 @@ import (
 	"sync"
 )
 
+type Observer interface {
+	Observe() (chan []Node, error)
+	AddNode(*Node) error
+	RemoveNode(*Node) error
+}
+
 // registerNodes either receives new nodes to be sifted and sent out of the newChannel or receives nodes that could not receive a message that need to be blacklisted.
 func registerNodes(ochan <-chan []Node, nchan chan Node, schan chan Node, fchan <-chan Node, blacklist NodeMapper, current NodeMapper) {
 	for {

@@ -49,6 +49,13 @@ func WithClientContext(ctx context.Context) CourierOption {
 	}
 }
 
+// WithObserver sets what Observer will be looking for nodes
+func WithObserver(observer Observer) CourierOption {
+	return func(c *Courier) {
+		c.Observer = observer
+	}
+}
+
 // WithDialOption sets the dial options for gRPC connections in the client
 func WithDialOptions(option ...grpc.DialOption) CourierOption {
 	return func(c *Courier) {
@@ -99,7 +106,7 @@ type Courier struct {
 	clientSubscribers       SubMapper
 	responses               ResponseMapper
 	internalSubChannels     channelMapper
-	server                  proto.MessageServerServer
+	server                  *grpc.Server
 	StartOnCreation         bool
 }
 
@@ -147,7 +154,9 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 		c.DialOptions = append(c.DialOptions, grpc.WithInsecure())
 	}
 
-	c.server = NewMessageServer(c.responseChannel, c.internalSubChannels)
+	grpcServer := grpc.NewServer()
+	proto.RegisterMessageServerServer(grpcServer, NewMessageServer(c.responseChannel, c.internalSubChannels))
+	c.server = grpcServer
 
 	if c.StartOnCreation {
 		err := c.Start()
@@ -160,16 +169,15 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 }
 
 func (c *Courier) Start() error {
-	lis, err := getListener(c.Port)
-	if err != nil {
-		return fmt.Errorf("could not create listener: %s", err)
-	}
-
 	go registerNodes(c.observerChannel, c.newNodeChannel, c.staleNodeChannel, c.failedConnectionChannel, c.blacklistNodes, c.currentNodes)
 	go listenForResponseInfo(c.responseChannel, c.responses)
 	go listenForNewNodes(c.newNodeChannel, c.clientNodes, c.clientSubscribers)
 	go listenForStaleNodes(c.staleNodeChannel, c.clientNodes, c.clientSubscribers)
-	go startMessageServer(c.server, lis)
+
+	err := startMessageServer(c.server, c.Port)
+	if err != nil {
+		return fmt.Errorf("could not start server %s", err)
+	}
 
 	n := NewNode(c.Id, c.Hostname, c.Port, c.SubscribedSubjects, c.BroadcastedSubjects)
 
@@ -181,6 +189,10 @@ func (c *Courier) Start() error {
 	return nil
 }
 
+func (c *Courier) Stop() {
+	c.server.GracefulStop()
+}
+
 func (c *Courier) Push(m Message) error {
 	ids, err := generateIdsBySubject(m.Subject, c.clientSubscribers)
 	if err != nil {
@@ -189,7 +201,10 @@ func (c *Courier) Push(m Message) error {
 
 	nodes := idToNodes(ids, c.clientNodes)
 	clients := nodeToCourierClients(nodes, c.Id, c.DialOptions...)
-	fanMessageAttempts(clients, c.ClientContext, c.attemptMetadata, m, sendPublishMessage)
+	failed := fanMessageAttempts(clients, c.ClientContext, c.attemptMetadata, m, sendPublishMessage)
+	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
+
+	<-done
 
 	return nil
 }
@@ -202,7 +217,10 @@ func (c *Courier) Request(m Message) error {
 
 	nodes := idToNodes(ids, c.clientNodes)
 	clients := nodeToCourierClients(nodes, c.Id, c.DialOptions...)
-	fanMessageAttempts(clients, c.ClientContext, c.attemptMetadata, m, sendRequestMessage)
+	failed := fanMessageAttempts(clients, c.ClientContext, c.attemptMetadata, m, sendRequestMessage)
+	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
+
+	<-done
 
 	return nil
 }
@@ -215,7 +233,10 @@ func (c *Courier) Response(m Message) error {
 
 	nodes := idToNodes(ids, c.clientNodes)
 	clients := nodeToCourierClients(nodes, c.Id, c.DialOptions...)
-	fanMessageAttempts(clients, c.ClientContext, c.attemptMetadata, m, sendResponseMessage)
+	failed := fanMessageAttempts(clients, c.ClientContext, c.attemptMetadata, m, sendResponseMessage)
+	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
+
+	<-done
 
 	return nil
 }
