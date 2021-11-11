@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
 )
 
@@ -382,43 +381,43 @@ func TestIdToNodes(t *testing.T) {
 Expected Outcomes:
 - every node in should have a courierClient sent through the out channel
 **************************************************************/
-func TestNodeToCourierClients(t *testing.T) {
-	type test struct {
-		nodeCount int
-	}
+// func TestNodeToCourierClients(t *testing.T) {
+// 	type test struct {
+// 		nodeCount int
+// 	}
 
-	tests := []test{
-		{
-			nodeCount: 10,
-		},
-		{
-			nodeCount: 1000,
-		},
-	}
+// 	tests := []test{
+// 		{
+// 			nodeCount: 10,
+// 		},
+// 		{
+// 			nodeCount: 1000,
+// 		},
+// 	}
 
-	for _, tc := range tests {
-		nodes := CreateTestNodes(int(tc.nodeCount), &TestNodeOptions{})
-		in := make(chan Node)
+// 	for _, tc := range tests {
+// 		nodes := CreateTestNodes(int(tc.nodeCount), &TestNodeOptions{})
+// 		in := make(chan Node)
 
-		go func() {
-			for _, n := range nodes {
-				in <- *n
-			}
-			close(in)
-		}()
+// 		go func() {
+// 			for _, n := range nodes {
+// 				in <- *n
+// 			}
+// 			close(in)
+// 		}()
 
-		out := nodeToCourierClients(in, uuid.NewString(), grpc.WithInsecure())
+// 		out := nodeToCourierClients(in, uuid.NewString(), grpc.WithInsecure())
 
-		count := 0
-		for range out {
-			count++
-		}
+// 		count := 0
+// 		for range out {
+// 			count++
+// 		}
 
-		if count != tc.nodeCount {
-			t.Fatalf("expected %v clients but got %v", tc.nodeCount, count)
-		}
-	}
-}
+// 		if count != tc.nodeCount {
+// 			t.Fatalf("expected %v clients but got %v", tc.nodeCount, count)
+// 		}
+// 	}
+// }
 
 /**************************************************************
 Expected Outcomes:
