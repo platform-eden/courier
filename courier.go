@@ -42,13 +42,6 @@ func WithPort(port string) CourierOption {
 	}
 }
 
-// WithClientContext sets the context for gRPC connections in the client
-func WithClientContext(ctx context.Context) CourierOption {
-	return func(c *Courier) {
-		c.ClientContext = ctx
-	}
-}
-
 // WithObserver sets what Observer will be looking for nodes
 func WithObserver(observer Observer) CourierOption {
 	return func(c *Courier) {
@@ -93,7 +86,6 @@ type Courier struct {
 	BroadcastedSubjects     []string
 	Observer                Observer
 	attemptMetadata         attemptMetadata
-	ClientContext           context.Context
 	DialOptions             []grpc.DialOption
 	observerChannel         chan []Node
 	newNodeChannel          chan Node
@@ -102,7 +94,7 @@ type Courier struct {
 	responseChannel         chan ResponseInfo
 	blacklistNodes          NodeMapper
 	currentNodes            NodeMapper
-	clientNodes             NodeMapper
+	clientNodes             ClientNodeMapper
 	clientSubscribers       SubMapper
 	responses               ResponseMapper
 	internalSubChannels     channelMapper
@@ -121,7 +113,6 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 			maxAttempts:  3,
 			waitInterval: time.Second,
 		},
-		ClientContext:           context.TODO(),
 		DialOptions:             []grpc.DialOption{},
 		Observer:                nil,
 		observerChannel:         make(chan []Node),
@@ -131,7 +122,7 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 		responseChannel:         make(chan ResponseInfo),
 		blacklistNodes:          NewNodeMap(),
 		currentNodes:            NewNodeMap(),
-		clientNodes:             NewNodeMap(),
+		clientNodes:             newClientNodeMap(),
 		clientSubscribers:       newSubscriberMap(),
 		responses:               newResponseMap(),
 		internalSubChannels:     newChannelMap(),
@@ -171,7 +162,7 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 func (c *Courier) Start() error {
 	go registerNodes(c.observerChannel, c.newNodeChannel, c.staleNodeChannel, c.failedConnectionChannel, c.blacklistNodes, c.currentNodes)
 	go listenForResponseInfo(c.responseChannel, c.responses)
-	go listenForNewNodes(c.newNodeChannel, c.clientNodes, c.clientSubscribers)
+	go listenForNewNodes(c.newNodeChannel, c.clientNodes, c.clientSubscribers, c.Id, c.DialOptions...)
 	go listenForStaleNodes(c.staleNodeChannel, c.clientNodes, c.clientSubscribers)
 
 	err := startMessageServer(c.server, c.Port)
@@ -193,15 +184,18 @@ func (c *Courier) Stop() {
 	c.server.GracefulStop()
 }
 
-func (c *Courier) Push(m Message) error {
+func (c *Courier) Publish(ctx context.Context, m Message) error {
+	if m.Type != PubMessage {
+		return errors.New("message must be of type publish")
+	}
+
 	ids, err := generateIdsBySubject(m.Subject, c.clientSubscribers)
 	if err != nil {
 		return fmt.Errorf("couldn't generate ids: %s", err)
 	}
 
-	nodes := idToNodes(ids, c.clientNodes)
-	clients := nodeToCourierClients(nodes, c.Id, c.DialOptions...)
-	failed := fanMessageAttempts(clients, c.ClientContext, c.attemptMetadata, m, sendPublishMessage)
+	cnodes := idToClientNodes(ids, c.clientNodes)
+	failed := fanMessageAttempts(cnodes, ctx, c.attemptMetadata, m, sendPublishMessage)
 	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
 
 	<-done
@@ -209,31 +203,37 @@ func (c *Courier) Push(m Message) error {
 	return nil
 }
 
-func (c *Courier) Request(m Message) error {
+func (c *Courier) Request(ctx context.Context, m Message) error {
+	if m.Type != ReqMessage {
+		return errors.New("message must be of type request")
+	}
+
+	ids, err := generateIdsBySubject(m.Subject, c.clientSubscribers)
+	if err != nil {
+		return fmt.Errorf("couldn't generate ids: %s", err)
+	}
+
+	cnodes := idToClientNodes(ids, c.clientNodes)
+	failed := fanMessageAttempts(cnodes, ctx, c.attemptMetadata, m, sendRequestMessage)
+	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
+
+	<-done
+
+	return nil
+}
+
+func (c *Courier) Response(ctx context.Context, m Message) error {
+	if m.Type != RespMessage {
+		return errors.New("message must be of type response")
+	}
+
 	ids, err := generateIdsByMessage(m.Id, c.responses)
 	if err != nil {
 		return fmt.Errorf("couldn't generate ids: %s", err)
 	}
 
-	nodes := idToNodes(ids, c.clientNodes)
-	clients := nodeToCourierClients(nodes, c.Id, c.DialOptions...)
-	failed := fanMessageAttempts(clients, c.ClientContext, c.attemptMetadata, m, sendRequestMessage)
-	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
-
-	<-done
-
-	return nil
-}
-
-func (c *Courier) Response(m Message) error {
-	ids, err := generateIdsBySubject(m.Subject, c.clientSubscribers)
-	if err != nil {
-		return fmt.Errorf("couldn't generate ids: %s", err)
-	}
-
-	nodes := idToNodes(ids, c.clientNodes)
-	clients := nodeToCourierClients(nodes, c.Id, c.DialOptions...)
-	failed := fanMessageAttempts(clients, c.ClientContext, c.attemptMetadata, m, sendResponseMessage)
+	cnodes := idToClientNodes(ids, c.clientNodes)
+	failed := fanMessageAttempts(cnodes, ctx, c.attemptMetadata, m, sendResponseMessage)
 	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
 
 	<-done
