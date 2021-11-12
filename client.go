@@ -11,13 +11,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-type courierClient struct {
-	client     proto.MessageServerClient
-	connection grpc.ClientConn
-	currentId  string
-	receiver   Node
-}
-
 type attemptMetadata struct {
 	maxAttempts  int
 	waitInterval time.Duration
