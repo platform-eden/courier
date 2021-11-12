@@ -102,7 +102,7 @@ type Courier struct {
 	responseChannel         chan ResponseInfo
 	blacklistNodes          NodeMapper
 	currentNodes            NodeMapper
-	clientNodes             NodeMapper
+	clientNodes             ClientNodeMapper
 	clientSubscribers       SubMapper
 	responses               ResponseMapper
 	internalSubChannels     channelMapper
@@ -131,7 +131,7 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 		responseChannel:         make(chan ResponseInfo),
 		blacklistNodes:          NewNodeMap(),
 		currentNodes:            NewNodeMap(),
-		clientNodes:             NewNodeMap(),
+		clientNodes:             newClientNodeMap(),
 		clientSubscribers:       newSubscriberMap(),
 		responses:               newResponseMap(),
 		internalSubChannels:     newChannelMap(),
@@ -171,7 +171,7 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 func (c *Courier) Start() error {
 	go registerNodes(c.observerChannel, c.newNodeChannel, c.staleNodeChannel, c.failedConnectionChannel, c.blacklistNodes, c.currentNodes)
 	go listenForResponseInfo(c.responseChannel, c.responses)
-	go listenForNewNodes(c.newNodeChannel, c.clientNodes, c.clientSubscribers)
+	go listenForNewNodes(c.newNodeChannel, c.clientNodes, c.clientSubscribers, c.Id, c.DialOptions...)
 	go listenForStaleNodes(c.staleNodeChannel, c.clientNodes, c.clientSubscribers)
 
 	err := startMessageServer(c.server, c.Port)
@@ -199,9 +199,8 @@ func (c *Courier) Push(m Message) error {
 		return fmt.Errorf("couldn't generate ids: %s", err)
 	}
 
-	nodes := idToNodes(ids, c.clientNodes)
-	clients := nodeToCourierClients(nodes, c.Id, c.DialOptions...)
-	failed := fanMessageAttempts(clients, c.ClientContext, c.attemptMetadata, m, sendPublishMessage)
+	cnodes := idToClientNodes(ids, c.clientNodes)
+	failed := fanMessageAttempts(cnodes, c.ClientContext, c.attemptMetadata, m, sendPublishMessage)
 	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
 
 	<-done
@@ -215,9 +214,8 @@ func (c *Courier) Request(m Message) error {
 		return fmt.Errorf("couldn't generate ids: %s", err)
 	}
 
-	nodes := idToNodes(ids, c.clientNodes)
-	clients := nodeToCourierClients(nodes, c.Id, c.DialOptions...)
-	failed := fanMessageAttempts(clients, c.ClientContext, c.attemptMetadata, m, sendRequestMessage)
+	cnodes := idToClientNodes(ids, c.clientNodes)
+	failed := fanMessageAttempts(cnodes, c.ClientContext, c.attemptMetadata, m, sendRequestMessage)
 	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
 
 	<-done
@@ -231,9 +229,8 @@ func (c *Courier) Response(m Message) error {
 		return fmt.Errorf("couldn't generate ids: %s", err)
 	}
 
-	nodes := idToNodes(ids, c.clientNodes)
-	clients := nodeToCourierClients(nodes, c.Id, c.DialOptions...)
-	failed := fanMessageAttempts(clients, c.ClientContext, c.attemptMetadata, m, sendResponseMessage)
+	cnodes := idToClientNodes(ids, c.clientNodes)
+	failed := fanMessageAttempts(cnodes, c.ClientContext, c.attemptMetadata, m, sendResponseMessage)
 	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
 
 	<-done

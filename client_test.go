@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
 )
 
@@ -67,31 +68,35 @@ func TestListenForResponseInfo(t *testing.T) {
 
 /**************************************************************
 Expected Outcomes:
-- all nodes passed in should be added to the nodeMap
+- all nodes passed in should be turned into clientNodes
+- nodes that erred on clientNode creation should be skipped
 - all nodes passed in should be added to the subjects they subscribe to in subscribeMap
 **************************************************************/
 func TestListenForNewNodes(t *testing.T) {
 	type test struct {
 		newNodes int
+		options  []grpc.DialOption
 	}
 
 	tests := []test{
 		{
 			newNodes: 10,
+			options:  []grpc.DialOption{grpc.WithInsecure()},
 		},
 		{
 			newNodes: 100,
+			options:  []grpc.DialOption{grpc.WithInsecure()},
 		},
 	}
 
 	for _, tc := range tests {
-		nodeMap := NewNodeMap()
+		nodeMap := newClientNodeMap()
 		subMap := newSubscriberMap()
 		subjects := []string{"test", "test1", "test2"}
 		nodes := CreateTestNodes(tc.newNodes, &TestNodeOptions{SubscribedSubjects: subjects})
 		nchan := make(chan Node)
 
-		go listenForNewNodes(nchan, nodeMap, subMap)
+		go listenForNewNodes(nchan, nodeMap, subMap, uuid.NewString(), tc.options...)
 
 		for _, n := range nodes {
 			nchan <- *n
@@ -124,7 +129,10 @@ func TestListenForNewNodes(t *testing.T) {
 
 		select {
 		case <-done:
-		case <-time.After(time.Second * 3):
+		case <-time.After(time.Millisecond * 300):
+			if len(tc.options) == 0 {
+				continue
+			}
 			t.Fatal("nodes not added in time")
 		}
 
@@ -150,7 +158,7 @@ func TestListenForStaleNodes(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		nodeMap := NewNodeMap()
+		nodeMap := newClientNodeMap()
 		subMap := newSubscriberMap()
 		subjects := []string{"test", "test1", "test2"}
 		nodes := CreateTestNodes(tc.staleNodes, &TestNodeOptions{SubscribedSubjects: subjects})
@@ -158,7 +166,9 @@ func TestListenForStaleNodes(t *testing.T) {
 
 		for _, n := range nodes {
 			subMap.Add(n.Id, n.SubscribedSubjects...)
-			nodeMap.Add(*n)
+			nodeMap.Add(clientNode{
+				Node: *n,
+			})
 		}
 
 		go listenForStaleNodes(schan, nodeMap, subMap)
@@ -322,10 +332,10 @@ func TestGenerateIdsByMessage(t *testing.T) {
 
 /**************************************************************
 Expected Outcomes:
-- all ids passed in with a valid node will have a node passed out
+- all ids passed in with a valid node will have a clientNode passed out
 - all ids that don't have a valid node wil be skipped
 **************************************************************/
-func TestIdToNodes(t *testing.T) {
+func TestIdToCLientNodes(t *testing.T) {
 	type test struct {
 		nodeCount    int
 		invalidCount int
@@ -344,11 +354,15 @@ func TestIdToNodes(t *testing.T) {
 
 	for _, tc := range tests {
 		nodes := CreateTestNodes(tc.nodeCount, &TestNodeOptions{})
-		nodeMap := NewNodeMap()
+		nodeMap := newClientNodeMap()
 		in := make(chan string)
 		ids := []string{}
 		for _, n := range nodes {
-			nodeMap.Add(*n)
+			cn, err := newClientNode(*n, uuid.NewString(), grpc.WithInsecure())
+			if err != nil {
+				t.Fatalf("could not create clientNode: %s", err)
+			}
+			nodeMap.Add(*cn)
 			ids = append(ids, n.Id)
 		}
 
@@ -356,7 +370,7 @@ func TestIdToNodes(t *testing.T) {
 			ids = append(ids, uuid.NewString())
 		}
 
-		out := idToNodes(in, nodeMap)
+		out := idToClientNodes(in, nodeMap)
 
 		go func() {
 			for _, id := range ids {
@@ -376,48 +390,6 @@ func TestIdToNodes(t *testing.T) {
 
 	}
 }
-
-/**************************************************************
-Expected Outcomes:
-- every node in should have a courierClient sent through the out channel
-**************************************************************/
-// func TestNodeToCourierClients(t *testing.T) {
-// 	type test struct {
-// 		nodeCount int
-// 	}
-
-// 	tests := []test{
-// 		{
-// 			nodeCount: 10,
-// 		},
-// 		{
-// 			nodeCount: 1000,
-// 		},
-// 	}
-
-// 	for _, tc := range tests {
-// 		nodes := CreateTestNodes(int(tc.nodeCount), &TestNodeOptions{})
-// 		in := make(chan Node)
-
-// 		go func() {
-// 			for _, n := range nodes {
-// 				in <- *n
-// 			}
-// 			close(in)
-// 		}()
-
-// 		out := nodeToCourierClients(in, uuid.NewString(), grpc.WithInsecure())
-
-// 		count := 0
-// 		for range out {
-// 			count++
-// 		}
-
-// 		if count != tc.nodeCount {
-// 			t.Fatalf("expected %v clients but got %v", tc.nodeCount, count)
-// 		}
-// 	}
-// }
 
 /**************************************************************
 Expected Outcomes:
@@ -454,11 +426,11 @@ func TestFanMessageAttempts(t *testing.T) {
 		ctx := context.Background()
 		msg := NewPubMessage("test", "test", []byte("test"))
 		nodes := CreateTestNodes(tc.clientCount, &TestNodeOptions{})
-		in := make(chan courierClient, tc.clientCount)
+		in := make(chan clientNode, tc.clientCount)
 		// clients := {}
 		for _, n := range nodes {
-			c := courierClient{
-				receiver: *n,
+			c := clientNode{
+				Node: *n,
 			}
 
 			in <- c
@@ -467,7 +439,7 @@ func TestFanMessageAttempts(t *testing.T) {
 		fcount := 0
 		scount := 0
 		l := NewTicketLock()
-		send := func(ctx context.Context, msg Message, client courierClient) error {
+		send := func(ctx context.Context, msg Message, client clientNode) error {
 			fail := false
 			l.Lock()
 			scount++
@@ -532,10 +504,10 @@ func TestAttemptMessage(t *testing.T) {
 		ctx := context.Background()
 		msg := NewPubMessage("test", "test", []byte("test"))
 		nchan := make(chan Node, 1)
-		client := courierClient{
-			receiver: *CreateTestNodes(1, &TestNodeOptions{})[0],
+		client := clientNode{
+			Node: *CreateTestNodes(1, &TestNodeOptions{})[0],
 		}
-		send := func(ctx context.Context, msg Message, client courierClient) error {
+		send := func(ctx context.Context, msg Message, client clientNode) error {
 			if tc.expectedFailure == true {
 				return fmt.Errorf("failure!")
 			}
@@ -671,11 +643,11 @@ func TestSendPublishMessage(t *testing.T) {
 		}
 		defer conn.Close()
 
-		cc := courierClient{
+		cc := clientNode{
 			client:     client,
 			connection: *conn,
 			currentId:  uuid.NewString(),
-			receiver:   *CreateTestNodes(1, &TestNodeOptions{})[0],
+			Node:       *CreateTestNodes(1, &TestNodeOptions{})[0],
 		}
 
 		err = sendPublishMessage(context.Background(), tc.m, cc)
@@ -734,11 +706,11 @@ func TestSendRequestMessage(t *testing.T) {
 		}
 		defer conn.Close()
 
-		cc := courierClient{
+		cc := clientNode{
 			client:     client,
 			connection: *conn,
 			currentId:  uuid.NewString(),
-			receiver:   *CreateTestNodes(1, &TestNodeOptions{})[0],
+			Node:       *CreateTestNodes(1, &TestNodeOptions{})[0],
 		}
 
 		err = sendRequestMessage(context.Background(), tc.m, cc)
@@ -797,11 +769,11 @@ func TestSendResponseMessage(t *testing.T) {
 		}
 		defer conn.Close()
 
-		cc := courierClient{
+		cc := clientNode{
 			client:     client,
 			connection: *conn,
 			currentId:  uuid.NewString(),
-			receiver:   *CreateTestNodes(1, &TestNodeOptions{})[0],
+			Node:       *CreateTestNodes(1, &TestNodeOptions{})[0],
 		}
 
 		err = sendResponseMessage(context.Background(), tc.m, cc)
