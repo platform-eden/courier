@@ -10,8 +10,7 @@ import (
 
 type clientNode struct {
 	Node
-	client     proto.MessageServerClient
-	connection grpc.ClientConn
+	connection *grpc.ClientConn
 	currentId  string
 }
 
@@ -23,8 +22,7 @@ func newClientNode(node Node, currrentId string, options ...grpc.DialOption) (*c
 
 	n := clientNode{
 		Node:       node,
-		client:     proto.NewMessageServerClient(conn),
-		connection: *conn,
+		connection: conn,
 		currentId:  currrentId,
 	}
 
@@ -54,7 +52,7 @@ func (c *clientNode) sendPublishMessage(ctx context.Context, m Message) error {
 		return fmt.Errorf("message type must be of type PublishMessage")
 	}
 
-	_, err := c.client.PublishMessage(ctx, &proto.PublishMessageRequest{
+	_, err := proto.NewMessageServerClient(c.connection).PublishMessage(ctx, &proto.PublishMessageRequest{
 		Message: &proto.PublishMessage{
 			Id:      m.Id,
 			Subject: m.Subject,
@@ -73,7 +71,7 @@ func (c *clientNode) sendRequestMessage(ctx context.Context, m Message) error {
 		return fmt.Errorf("message type must be of type RequestMessage")
 	}
 
-	_, err := c.client.RequestMessage(ctx, &proto.RequestMessageRequest{
+	_, err := proto.NewMessageServerClient(c.connection).RequestMessage(ctx, &proto.RequestMessageRequest{
 		Message: &proto.RequestMessage{
 			Id:      m.Id,
 			NodeId:  c.Id,
@@ -92,7 +90,8 @@ func (c *clientNode) sendResponseMessage(ctx context.Context, m Message) error {
 	if m.Type != RespMessage {
 		return fmt.Errorf("message type must be of type ResponseMessage")
 	}
-	_, err := c.client.ResponseMessage(ctx, &proto.ResponseMessageRequest{
+
+	_, err := proto.NewMessageServerClient(c.connection).ResponseMessage(ctx, &proto.ResponseMessageRequest{
 		Message: &proto.ResponseMessage{
 			Id:      m.Id,
 			Subject: m.Subject,

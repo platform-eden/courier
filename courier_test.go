@@ -238,15 +238,14 @@ func TestCourier_Publish(t *testing.T) {
 
 		for _, n := range nodes {
 			c.clientSubscribers.Add(n.Id, tc.nodeSubject)
-			client, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
+			_, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
 			if err != nil {
 				t.Fatalf("could not create grpc client: %s", err)
 			}
 
 			cn := clientNode{
 				Node:       *n,
-				client:     client,
-				connection: *conn,
+				connection: conn,
 				currentId:  c.Id,
 			}
 
@@ -351,15 +350,14 @@ func TestCourier_Request(t *testing.T) {
 
 		for _, n := range nodes {
 			c.clientSubscribers.Add(n.Id, tc.nodeSubject)
-			client, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
+			_, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
 			if err != nil {
 				t.Fatalf("could not create grpc client: %s", err)
 			}
 
 			cn := clientNode{
 				Node:       *n,
-				client:     client,
-				connection: *conn,
+				connection: conn,
 				currentId:  c.Id,
 			}
 
@@ -461,15 +459,14 @@ func TestCourier_Response(t *testing.T) {
 
 		for _, n := range nodes {
 			c.clientSubscribers.Add(n.Id, tc.nodeSubject)
-			client, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
+			_, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
 			if err != nil {
 				t.Fatalf("could not create grpc client: %s", err)
 			}
 
 			cn := clientNode{
 				Node:       *n,
-				client:     client,
-				connection: *conn,
+				connection: conn,
 				currentId:  c.Id,
 			}
 

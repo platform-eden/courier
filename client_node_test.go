@@ -81,7 +81,7 @@ func TestClientNode_SendPublishMessage(t *testing.T) {
 
 	for _, tc := range tests {
 		server := NewMockServer(bufconn.Listen(1024*1024), tc.serverFailure)
-		client, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
+		_, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
 		if err != nil {
 			if tc.expectedFailure {
 				continue
@@ -91,8 +91,7 @@ func TestClientNode_SendPublishMessage(t *testing.T) {
 		defer conn.Close()
 
 		cc := clientNode{
-			client:     client,
-			connection: *conn,
+			connection: conn,
 			currentId:  uuid.NewString(),
 			Node:       *CreateTestNodes(1, &TestNodeOptions{})[0],
 		}
@@ -144,7 +143,7 @@ func TestClientNode_SendRequestMessage(t *testing.T) {
 
 	for _, tc := range tests {
 		server := NewMockServer(bufconn.Listen(1024*1024), tc.serverFailure)
-		client, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
+		_, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
 		if err != nil {
 			if tc.expectedFailure {
 				continue
@@ -154,8 +153,7 @@ func TestClientNode_SendRequestMessage(t *testing.T) {
 		defer conn.Close()
 
 		cc := clientNode{
-			client:     client,
-			connection: *conn,
+			connection: conn,
 			currentId:  uuid.NewString(),
 			Node:       *CreateTestNodes(1, &TestNodeOptions{})[0],
 		}
@@ -207,7 +205,7 @@ func TestClientNode_SendResponseMessage(t *testing.T) {
 
 	for _, tc := range tests {
 		server := NewMockServer(bufconn.Listen(1024*1024), tc.serverFailure)
-		client, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
+		_, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
 		if err != nil {
 			if tc.expectedFailure {
 				continue
@@ -217,8 +215,7 @@ func TestClientNode_SendResponseMessage(t *testing.T) {
 		defer conn.Close()
 
 		cc := clientNode{
-			client:     client,
-			connection: *conn,
+			connection: conn,
 			currentId:  uuid.NewString(),
 			Node:       *CreateTestNodes(1, &TestNodeOptions{})[0],
 		}
