@@ -2,14 +2,12 @@ package courier
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/test/bufconn"
 )
 
 /**************************************************************
@@ -335,7 +333,7 @@ Expected Outcomes:
 - all ids passed in with a valid node will have a clientNode passed out
 - all ids that don't have a valid node wil be skipped
 **************************************************************/
-func TestIdToCLientNodes(t *testing.T) {
+func TestIdToClientNodes(t *testing.T) {
 	type test struct {
 		nodeCount    int
 		invalidCount int
@@ -426,37 +424,22 @@ func TestFanMessageAttempts(t *testing.T) {
 		ctx := context.Background()
 		msg := NewPubMessage("test", "test", []byte("test"))
 		nodes := CreateTestNodes(tc.clientCount, &TestNodeOptions{})
-		in := make(chan clientNode, tc.clientCount)
-		// clients := {}
+		in := make(chan Sender, tc.clientCount)
+
+		fails := 0
 		for _, n := range nodes {
-			c := clientNode{
-				Node: *n,
+			clientFail := false
+			if fails < tc.failures {
+				clientFail = true
 			}
+			fails++
+
+			c := NewMockClientNode(*n, clientFail)
 
 			in <- c
 		}
 
-		fcount := 0
-		scount := 0
-		l := NewTicketLock()
-		send := func(ctx context.Context, msg Message, client clientNode) error {
-			fail := false
-			l.Lock()
-			scount++
-			if fcount != tc.failures {
-				fcount++
-				fail = true
-			}
-			l.Unlock()
-
-			if fail {
-				return fmt.Errorf("failure!")
-			}
-
-			return nil
-		}
-
-		out := fanMessageAttempts(in, ctx, metadata, msg, send)
+		out := fanMessageAttempts(in, ctx, metadata, msg)
 
 		close(in)
 		count := 0
@@ -467,11 +450,6 @@ func TestFanMessageAttempts(t *testing.T) {
 		if count != tc.failures {
 			t.Fatalf("expected %v amount of failures but got %v instead", tc.failures, count)
 		}
-
-		if scount != tc.clientCount {
-			t.Fatalf("expected %v amount of sends but got %v instead", tc.clientCount, scount)
-		}
-
 	}
 }
 
@@ -504,20 +482,10 @@ func TestAttemptMessage(t *testing.T) {
 		ctx := context.Background()
 		msg := NewPubMessage("test", "test", []byte("test"))
 		nchan := make(chan Node, 1)
-		client := clientNode{
-			Node: *CreateTestNodes(1, &TestNodeOptions{})[0],
-		}
-		send := func(ctx context.Context, msg Message, client clientNode) error {
-			if tc.expectedFailure == true {
-				return fmt.Errorf("failure!")
-			}
-
-			return nil
-		}
-
+		client := NewMockClientNode(*CreateTestNodes(1, &TestNodeOptions{})[0], tc.expectedFailure)
 		wg.Add(1)
 
-		attemptMessage(ctx, client, metadata, msg, send, nchan, wg)
+		attemptMessage(ctx, client, metadata, msg, nchan, wg)
 
 		wg.Wait()
 
@@ -598,194 +566,5 @@ func TestForwardFailedMessages(t *testing.T) {
 			t.Fatalf("mismatched counts: expected: %v, fchan: %v, schan: %v", tc.nodeCount, fcount, scount)
 		}
 
-	}
-}
-
-/**************************************************************
-Expected Outcomes:
-- should send a publish message to a grpc server successfully
-- returns error if the message was not sent successfully
-- returns error if message is not a publish message
-**************************************************************/
-func TestSendPublishMessage(t *testing.T) {
-	type test struct {
-		m               Message
-		serverFailure   bool
-		expectedFailure bool
-	}
-
-	tests := []test{
-		{
-			m:               NewPubMessage(uuid.NewString(), "test", []byte("test")),
-			serverFailure:   true,
-			expectedFailure: true,
-		},
-		{
-			m:               NewPubMessage(uuid.NewString(), "test", []byte("test")),
-			serverFailure:   false,
-			expectedFailure: false,
-		},
-		{
-			m:               NewReqMessage(uuid.NewString(), "test", []byte("test")),
-			serverFailure:   false,
-			expectedFailure: true,
-		},
-	}
-
-	for _, tc := range tests {
-		server := NewMockServer(bufconn.Listen(1024*1024), tc.serverFailure)
-		client, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
-		if err != nil {
-			if tc.expectedFailure {
-				continue
-			}
-			t.Fatalf("could not creat client for server: %s", err)
-		}
-		defer conn.Close()
-
-		cc := clientNode{
-			client:     client,
-			connection: *conn,
-			currentId:  uuid.NewString(),
-			Node:       *CreateTestNodes(1, &TestNodeOptions{})[0],
-		}
-
-		err = sendPublishMessage(context.Background(), tc.m, cc)
-		if err != nil {
-			if tc.expectedFailure {
-				continue
-			}
-			t.Fatalf("could not send message: %s", err)
-		}
-
-		if tc.expectedFailure {
-			t.Fatalf("sendPublishMessage was expected to fail but it didn't")
-		}
-	}
-}
-
-/**************************************************************
-Expected Outcomes:
-- should send a request message to a grpc server successfully
-- returns error if the message was not sent successfully
-- returns error if message is not a publish message
-**************************************************************/
-func TestSendRequestMessage(t *testing.T) {
-	type test struct {
-		m               Message
-		serverFailure   bool
-		expectedFailure bool
-	}
-
-	tests := []test{
-		{
-			m:               NewReqMessage(uuid.NewString(), "test", []byte("test")),
-			serverFailure:   true,
-			expectedFailure: true,
-		},
-		{
-			m:               NewReqMessage(uuid.NewString(), "test", []byte("test")),
-			serverFailure:   false,
-			expectedFailure: false,
-		},
-		{
-			m:               NewPubMessage(uuid.NewString(), "test", []byte("test")),
-			serverFailure:   false,
-			expectedFailure: true,
-		},
-	}
-
-	for _, tc := range tests {
-		server := NewMockServer(bufconn.Listen(1024*1024), tc.serverFailure)
-		client, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
-		if err != nil {
-			if tc.expectedFailure {
-				continue
-			}
-			t.Fatalf("could not creat client for server: %s", err)
-		}
-		defer conn.Close()
-
-		cc := clientNode{
-			client:     client,
-			connection: *conn,
-			currentId:  uuid.NewString(),
-			Node:       *CreateTestNodes(1, &TestNodeOptions{})[0],
-		}
-
-		err = sendRequestMessage(context.Background(), tc.m, cc)
-		if err != nil {
-			if tc.expectedFailure {
-				continue
-			}
-			t.Fatalf("could not send message: %s", err)
-		}
-
-		if tc.expectedFailure {
-			t.Fatalf("sendRequestMessage was expected to fail but it didn't")
-		}
-	}
-}
-
-/**************************************************************
-Expected Outcomes:
-- should send a request message to a grpc server successfully
-- returns error if the message was not sent successfully
-- returns error if message is not a publish message
-**************************************************************/
-func TestSendResponseMessage(t *testing.T) {
-	type test struct {
-		m               Message
-		serverFailure   bool
-		expectedFailure bool
-	}
-
-	tests := []test{
-		{
-			m:               NewRespMessage(uuid.NewString(), "test", []byte("test")),
-			serverFailure:   true,
-			expectedFailure: true,
-		},
-		{
-			m:               NewRespMessage(uuid.NewString(), "test", []byte("test")),
-			serverFailure:   false,
-			expectedFailure: false,
-		},
-		{
-			m:               NewPubMessage(uuid.NewString(), "test", []byte("test")),
-			serverFailure:   false,
-			expectedFailure: true,
-		},
-	}
-
-	for _, tc := range tests {
-		server := NewMockServer(bufconn.Listen(1024*1024), tc.serverFailure)
-		client, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
-		if err != nil {
-			if tc.expectedFailure {
-				continue
-			}
-			t.Fatalf("could not creat client for server: %s", err)
-		}
-		defer conn.Close()
-
-		cc := clientNode{
-			client:     client,
-			connection: *conn,
-			currentId:  uuid.NewString(),
-			Node:       *CreateTestNodes(1, &TestNodeOptions{})[0],
-		}
-
-		err = sendResponseMessage(context.Background(), tc.m, cc)
-		if err != nil {
-			if tc.expectedFailure {
-				continue
-			}
-			t.Fatalf("could not send message: %s", err)
-		}
-
-		if tc.expectedFailure {
-			t.Fatalf("sendResponseMessage was expected to fail but it didn't")
-		}
 	}
 }

@@ -1,6 +1,7 @@
 package courier
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/platform-edn/courier/proto"
@@ -28,4 +29,83 @@ func newClientNode(node Node, currrentId string, options ...grpc.DialOption) (*c
 	}
 
 	return &n, nil
+}
+
+func (c *clientNode) sendMessage(ctx context.Context, m Message) error {
+	var err error
+	switch m.Type {
+	case PubMessage:
+		err = c.sendPublishMessage(ctx, m)
+	case ReqMessage:
+		err = c.sendRequestMessage(ctx, m)
+	case RespMessage:
+		err = c.sendResponseMessage(ctx, m)
+	}
+
+	if err != nil {
+		return fmt.Errorf("error semding message: %s", err)
+	}
+
+	return nil
+}
+
+func (c *clientNode) sendPublishMessage(ctx context.Context, m Message) error {
+	if m.Type != PubMessage {
+		return fmt.Errorf("message type must be of type PublishMessage")
+	}
+
+	_, err := c.client.PublishMessage(ctx, &proto.PublishMessageRequest{
+		Message: &proto.PublishMessage{
+			Id:      m.Id,
+			Subject: m.Subject,
+			Content: m.Content,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("could not send message: %s", err)
+	}
+
+	return nil
+}
+
+func (c *clientNode) sendRequestMessage(ctx context.Context, m Message) error {
+	if m.Type != ReqMessage {
+		return fmt.Errorf("message type must be of type RequestMessage")
+	}
+
+	_, err := c.client.RequestMessage(ctx, &proto.RequestMessageRequest{
+		Message: &proto.RequestMessage{
+			Id:      m.Id,
+			NodeId:  c.Id,
+			Subject: m.Subject,
+			Content: m.Content,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("could not send message: %s", err)
+	}
+
+	return nil
+}
+
+func (c *clientNode) sendResponseMessage(ctx context.Context, m Message) error {
+	if m.Type != RespMessage {
+		return fmt.Errorf("message type must be of type ResponseMessage")
+	}
+	_, err := c.client.ResponseMessage(ctx, &proto.ResponseMessageRequest{
+		Message: &proto.ResponseMessage{
+			Id:      m.Id,
+			Subject: m.Subject,
+			Content: m.Content,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("could not send message: %s", err)
+	}
+
+	return nil
+}
+
+func (c *clientNode) Receiver() Node {
+	return c.Node
 }

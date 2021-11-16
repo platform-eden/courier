@@ -195,7 +195,7 @@ func (c *Courier) Publish(ctx context.Context, m Message) error {
 	}
 
 	cnodes := idToClientNodes(ids, c.clientNodes)
-	failed := fanMessageAttempts(cnodes, ctx, c.attemptMetadata, m, sendPublishMessage)
+	failed := fanMessageAttempts(cnodes, ctx, c.attemptMetadata, m)
 	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
 
 	<-done
@@ -214,7 +214,7 @@ func (c *Courier) Request(ctx context.Context, m Message) error {
 	}
 
 	cnodes := idToClientNodes(ids, c.clientNodes)
-	failed := fanMessageAttempts(cnodes, ctx, c.attemptMetadata, m, sendRequestMessage)
+	failed := fanMessageAttempts(cnodes, ctx, c.attemptMetadata, m)
 	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
 
 	<-done
@@ -233,7 +233,7 @@ func (c *Courier) Response(ctx context.Context, m Message) error {
 	}
 
 	cnodes := idToClientNodes(ids, c.clientNodes)
-	failed := fanMessageAttempts(cnodes, ctx, c.attemptMetadata, m, sendResponseMessage)
+	failed := fanMessageAttempts(cnodes, ctx, c.attemptMetadata, m)
 	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
 
 	<-done
