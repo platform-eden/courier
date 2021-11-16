@@ -7,9 +7,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/platform-edn/courier/proto"
 	"google.golang.org/grpc"
 )
+
+type Sender interface {
+	sendMessage(ctx context.Context, m Message) error
+	sendPublishMessage(ctx context.Context, m Message) error
+	sendRequestMessage(ctx context.Context, m Message) error
+	sendResponseMessage(ctx context.Context, m Message) error
+	Receiver() Node
+}
 
 type attemptMetadata struct {
 	maxAttempts  int
@@ -80,8 +87,8 @@ func generateIdsByMessage(messageId string, respMap ResponseMapper) (<-chan stri
 }
 
 // idToNodes takes a channel of ids and returns a channel of nodes based on the ids
-func idToClientNodes(in <-chan string, nodeMap ClientNodeMapper) <-chan clientNode {
-	out := make(chan clientNode)
+func idToClientNodes(in <-chan string, nodeMap ClientNodeMapper) <-chan Sender {
+	out := make(chan Sender)
 	go func() {
 		for id := range in {
 			n, exist := nodeMap.Node(id)
@@ -90,7 +97,7 @@ func idToClientNodes(in <-chan string, nodeMap ClientNodeMapper) <-chan clientNo
 				continue
 			}
 
-			out <- n
+			out <- &n
 		}
 		close(out)
 	}()
@@ -99,7 +106,7 @@ func idToClientNodes(in <-chan string, nodeMap ClientNodeMapper) <-chan clientNo
 }
 
 // fanMessageAttempts takes a channel of courierClients and creates a goroutine for each to attempt a   Returns a channel that will return nodes that unsuccessfully sent a message
-func fanMessageAttempts(in <-chan clientNode, ctx context.Context, metadata attemptMetadata, msg Message, send sendFunc) chan Node {
+func fanMessageAttempts(in <-chan Sender, ctx context.Context, metadata attemptMetadata, msg Message) chan Node {
 	out := make(chan Node)
 
 	go func() {
@@ -107,7 +114,7 @@ func fanMessageAttempts(in <-chan clientNode, ctx context.Context, metadata atte
 
 		for n := range in {
 			wg.Add(1)
-			go attemptMessage(ctx, n, metadata, msg, send, out, wg)
+			go attemptMessage(ctx, n, metadata, msg, out, wg)
 		}
 
 		wg.Wait()
@@ -118,12 +125,12 @@ func fanMessageAttempts(in <-chan clientNode, ctx context.Context, metadata atte
 }
 
 // attemptMessage takes a send function and attempts it until it succeeds or has reached maxAttempts.  Waits between attempts depends on the given interval
-func attemptMessage(ctx context.Context, client clientNode, metadata attemptMetadata, msg Message, send sendFunc, nchan chan Node, wg *sync.WaitGroup) {
+func attemptMessage(ctx context.Context, sender Sender, metadata attemptMetadata, msg Message, nchan chan Node, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	attempts := 0
 	for attempts < metadata.maxAttempts {
-		err := send(ctx, msg, client)
+		err := sender.sendMessage(ctx, msg)
 		if err != nil {
 			attempts++
 			time.Sleep(metadata.waitInterval)
@@ -133,7 +140,7 @@ func attemptMessage(ctx context.Context, client clientNode, metadata attemptMeta
 		return
 	}
 
-	nchan <- client.Node
+	nchan <- sender.Receiver()
 }
 
 // forwardFailedConnections takes a channel of nodes and sends them through a stale channel as well as a failed connection channel.  Returns a bool channel that receives true when it's done
@@ -152,63 +159,4 @@ func forwardFailedConnections(in <-chan Node, fchan chan Node, schan chan Node) 
 	}()
 
 	return out
-}
-
-type sendFunc func(context.Context, Message, clientNode) error
-
-func sendPublishMessage(ctx context.Context, m Message, cc clientNode) error {
-	if m.Type != PubMessage {
-		return fmt.Errorf("message type must be of type PublishMessage")
-	}
-
-	_, err := cc.client.PublishMessage(ctx, &proto.PublishMessageRequest{
-		Message: &proto.PublishMessage{
-			Id:      m.Id,
-			Subject: m.Subject,
-			Content: m.Content,
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("could not send message: %s", err)
-	}
-
-	return nil
-}
-
-func sendRequestMessage(ctx context.Context, m Message, cc clientNode) error {
-	if m.Type != ReqMessage {
-		return fmt.Errorf("message type must be of type RequestMessage")
-	}
-
-	_, err := cc.client.RequestMessage(ctx, &proto.RequestMessageRequest{
-		Message: &proto.RequestMessage{
-			Id:      m.Id,
-			NodeId:  cc.Id,
-			Subject: m.Subject,
-			Content: m.Content,
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("could not send message: %s", err)
-	}
-
-	return nil
-}
-
-func sendResponseMessage(ctx context.Context, m Message, cc clientNode) error {
-	if m.Type != RespMessage {
-		return fmt.Errorf("message type must be of type ResponseMessage")
-	}
-	_, err := cc.client.ResponseMessage(ctx, &proto.ResponseMessageRequest{
-		Message: &proto.ResponseMessage{
-			Id:      m.Id,
-			Subject: m.Subject,
-			Content: m.Content,
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("could not send message: %s", err)
-	}
-
-	return nil
 }

@@ -226,3 +226,96 @@ func (o *MockObserver) RemoveNode(*Node) error {
 
 	return nil
 }
+
+type MockClientNode struct {
+	Node
+	PublishCount  int
+	RequestCount  int
+	ResponseCount int
+	Fail          bool
+	Lock          Locker
+}
+
+func NewMockClientNode(node Node, fail bool) *MockClientNode {
+	c := MockClientNode{
+		Node:          node,
+		PublishCount:  0,
+		RequestCount:  0,
+		ResponseCount: 0,
+		Fail:          fail,
+		Lock:          NewTicketLock(),
+	}
+
+	return &c
+}
+
+func (c *MockClientNode) sendMessage(ctx context.Context, m Message) error {
+	var err error
+	switch m.Type {
+	case PubMessage:
+		err = c.sendPublishMessage(ctx, m)
+	case ReqMessage:
+		err = c.sendRequestMessage(ctx, m)
+	case RespMessage:
+		err = c.sendResponseMessage(ctx, m)
+	}
+
+	if err != nil {
+		return fmt.Errorf("error semding message: %s", err)
+	}
+
+	return nil
+}
+
+func (c *MockClientNode) sendPublishMessage(ctx context.Context, m Message) error {
+	c.Lock.Lock()
+	defer c.Lock.Unlock()
+
+	if c.Fail {
+		return fmt.Errorf("fail")
+	}
+
+	if m.Type != PubMessage {
+		return fmt.Errorf("message type must be of type PublishMessage")
+	}
+
+	c.PublishCount++
+
+	return nil
+}
+
+func (c *MockClientNode) sendRequestMessage(ctx context.Context, m Message) error {
+	c.Lock.Lock()
+	defer c.Lock.Unlock()
+
+	if c.Fail {
+		return fmt.Errorf("fail")
+	}
+
+	if m.Type != ReqMessage {
+		return fmt.Errorf("message type must be of type RequestMessage")
+	}
+
+	c.RequestCount++
+	return nil
+}
+
+func (c *MockClientNode) sendResponseMessage(ctx context.Context, m Message) error {
+	c.Lock.Lock()
+	defer c.Lock.Unlock()
+
+	if c.Fail {
+		return fmt.Errorf("fail")
+	}
+
+	if m.Type != RespMessage {
+		return fmt.Errorf("message type must be of type ResponseMessage")
+	}
+
+	c.ResponseCount++
+	return nil
+}
+
+func (c *MockClientNode) Receiver() Node {
+	return c.Node
+}
