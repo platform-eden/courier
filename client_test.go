@@ -523,7 +523,7 @@ func TestForwardFailedMessages(t *testing.T) {
 			nodeCount: 0,
 		},
 		{
-			nodeCount: 1000,
+			nodeCount: 100,
 		},
 	}
 
