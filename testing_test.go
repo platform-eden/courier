@@ -3,6 +3,7 @@ package courier
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/platform-edn/courier/proto"
@@ -22,7 +23,8 @@ func TestMockServer_Start(t *testing.T) {
 func TestMockServer_PublishMessage(t *testing.T) {
 	lis := bufconn.Listen(1024 * 1024)
 	s := NewMockServer(lis, false)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second*3))
+	defer cancel()
 
 	client, conn, err := NewLocalGRPCClient("bufnet", s.BufDialer)
 	if err != nil {
@@ -50,7 +52,8 @@ func TestMockServer_PublishMessage(t *testing.T) {
 func TestMockServer_ReqMessage(t *testing.T) {
 	lis := bufconn.Listen(1024 * 1024)
 	s := NewMockServer(lis, false)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second*3))
+	defer cancel()
 
 	client, conn, err := NewLocalGRPCClient("bufnset", s.BufDialer)
 	if err != nil {
@@ -83,7 +86,8 @@ func TestMockServer_ReqMessage(t *testing.T) {
 func TestMockServer_RespMessage(t *testing.T) {
 	lis := bufconn.Listen(1024 * 1024)
 	s := NewMockServer(lis, false)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second*3))
+	defer cancel()
 
 	client, conn, err := NewLocalGRPCClient("bufnet", s.BufDialer)
 	if err != nil {

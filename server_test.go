@@ -65,7 +65,7 @@ func TestMessageServer_PublishMessage(t *testing.T) {
 		defer conn.Close()
 
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Millisecond*80))
+			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second*3))
 			defer cancel()
 			m := proto.PublishMessageRequest{
 				Message: &proto.PublishMessage{
@@ -143,7 +143,7 @@ func TestMessageServer_ResponseMessage(t *testing.T) {
 		defer conn.Close()
 
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Millisecond*80))
+			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second*3))
 			defer cancel()
 			m := proto.ResponseMessageRequest{
 				Message: &proto.ResponseMessage{
@@ -221,7 +221,7 @@ func TestMessageServer_RequestMessage(t *testing.T) {
 		defer conn.Close()
 
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Millisecond*80))
+			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second*3))
 			defer cancel()
 			m := proto.RequestMessageRequest{
 				Message: &proto.RequestMessage{
