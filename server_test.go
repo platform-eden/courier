@@ -58,7 +58,7 @@ func TestMessageServer_PublishMessage(t *testing.T) {
 
 		go startTestServer(errchan, server)
 
-		client, conn, err := NewLocalGRPCClient("bufnet", bufDialer)
+		client, conn, err := NewLocalGRPCClient("bufnet2", bufDialer)
 		if err != nil {
 			t.Fatalf("could not create client: %s", err)
 		}
@@ -136,7 +136,7 @@ func TestMessageServer_ResponseMessage(t *testing.T) {
 
 		go startTestServer(errchan, server)
 
-		client, conn, err := NewLocalGRPCClient("bufnet", bufDialer)
+		client, conn, err := NewLocalGRPCClient("bufnet1", bufDialer)
 		if err != nil {
 			t.Fatalf("could not create client: %s", err)
 		}
@@ -214,7 +214,7 @@ func TestMessageServer_RequestMessage(t *testing.T) {
 
 		go startTestServer(errchan, server)
 
-		client, conn, err := NewLocalGRPCClient("bufnet", bufDialer)
+		client, conn, err := NewLocalGRPCClient("buf", bufDialer)
 		if err != nil {
 			t.Fatalf("could not create client: %s", err)
 		}
@@ -381,7 +381,9 @@ func startTestServer(errchan chan error, m *MessageServer) {
 	grpcServer := grpc.NewServer()
 
 	proto.RegisterMessageServerServer(grpcServer, m)
-	if err := grpcServer.Serve(lis); err != nil {
-		errchan <- fmt.Errorf("Server exited with error: %v", err)
-	}
+	go func() {
+		if err := grpcServer.Serve(lis); err != nil {
+			errchan <- fmt.Errorf("Server exited with error: %v", err)
+		}
+	}()
 }

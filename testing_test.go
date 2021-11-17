@@ -52,7 +52,7 @@ func TestMockServer_ReqMessage(t *testing.T) {
 	s := NewMockServer(lis, false)
 	ctx := context.Background()
 
-	client, conn, err := NewLocalGRPCClient("bufnet", s.BufDialer)
+	client, conn, err := NewLocalGRPCClient("bufnset", s.BufDialer)
 	if err != nil {
 		t.Fatalf("could not creat client for server: %s", err)
 	}
