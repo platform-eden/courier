@@ -184,18 +184,16 @@ func (c *Courier) Stop() {
 	c.server.GracefulStop()
 }
 
-func (c *Courier) Publish(ctx context.Context, m Message) error {
-	if m.Type != PubMessage {
-		return errors.New("message must be of type publish")
-	}
+func (c *Courier) Publish(ctx context.Context, subject string, content []byte) error {
+	msg := NewPubMessage(uuid.NewString(), subject, content)
 
-	ids, err := generateIdsBySubject(m.Subject, c.clientSubscribers)
+	ids, err := generateIdsBySubject(msg.Subject, c.clientSubscribers)
 	if err != nil {
 		return fmt.Errorf("couldn't generate ids: %s", err)
 	}
 
 	cnodes := idToClientNodes(ids, c.clientNodes)
-	failed := fanMessageAttempts(cnodes, ctx, c.attemptMetadata, m)
+	failed := fanMessageAttempts(cnodes, ctx, c.attemptMetadata, msg)
 	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
 
 	<-done
@@ -203,18 +201,16 @@ func (c *Courier) Publish(ctx context.Context, m Message) error {
 	return nil
 }
 
-func (c *Courier) Request(ctx context.Context, m Message) error {
-	if m.Type != ReqMessage {
-		return errors.New("message must be of type request")
-	}
+func (c *Courier) Request(ctx context.Context, subject string, content []byte) error {
+	msg := NewReqMessage(uuid.NewString(), subject, content)
 
-	ids, err := generateIdsBySubject(m.Subject, c.clientSubscribers)
+	ids, err := generateIdsBySubject(msg.Subject, c.clientSubscribers)
 	if err != nil {
 		return fmt.Errorf("couldn't generate ids: %s", err)
 	}
 
 	cnodes := idToClientNodes(ids, c.clientNodes)
-	failed := fanMessageAttempts(cnodes, ctx, c.attemptMetadata, m)
+	failed := fanMessageAttempts(cnodes, ctx, c.attemptMetadata, msg)
 	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
 
 	<-done
@@ -222,18 +218,16 @@ func (c *Courier) Request(ctx context.Context, m Message) error {
 	return nil
 }
 
-func (c *Courier) Response(ctx context.Context, m Message) error {
-	if m.Type != RespMessage {
-		return errors.New("message must be of type response")
-	}
+func (c *Courier) Response(ctx context.Context, id string, subject string, content []byte) error {
+	msg := NewRespMessage(id, subject, content)
 
-	ids, err := generateIdsByMessage(m.Id, c.responses)
+	ids, err := generateIdsByMessage(msg.Id, c.responses)
 	if err != nil {
 		return fmt.Errorf("couldn't generate ids: %s", err)
 	}
 
 	cnodes := idToClientNodes(ids, c.clientNodes)
-	failed := fanMessageAttempts(cnodes, ctx, c.attemptMetadata, m)
+	failed := fanMessageAttempts(cnodes, ctx, c.attemptMetadata, msg)
 	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
 
 	<-done

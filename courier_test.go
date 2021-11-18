@@ -189,7 +189,6 @@ func TestCourier_Publish(t *testing.T) {
 		nodeSubject     string
 		messageSubject  string
 		expectedFailure bool
-		messageFunc     createMessage
 	}
 
 	tests := []test{
@@ -199,7 +198,6 @@ func TestCourier_Publish(t *testing.T) {
 			nodeSubject:     "test",
 			messageSubject:  "test",
 			expectedFailure: false,
-			messageFunc:     NewPubMessage,
 		},
 		{
 			nodeCount:       1,
@@ -207,7 +205,6 @@ func TestCourier_Publish(t *testing.T) {
 			nodeSubject:     "test",
 			messageSubject:  "fail",
 			expectedFailure: true,
-			messageFunc:     NewPubMessage,
 		},
 		{
 			nodeCount:       1,
@@ -215,13 +212,11 @@ func TestCourier_Publish(t *testing.T) {
 			nodeSubject:     "test",
 			messageSubject:  "fail",
 			expectedFailure: true,
-			messageFunc:     NewReqMessage,
 		},
 	}
 
 	for _, tc := range tests {
 		server := NewMockServer(bufconn.Listen(1024*1024), false)
-		m := tc.messageFunc(uuid.NewString(), tc.nodeSubject, []byte("test"))
 		nodes := CreateTestNodes(tc.nodeCount, &TestNodeOptions{})
 		c, err := NewCourier(
 			WithObserver(newMockObserver(make(chan []Noder), false)),
@@ -255,7 +250,7 @@ func TestCourier_Publish(t *testing.T) {
 		done := make(chan bool)
 		errchan := make(chan error)
 		go func() {
-			err := c.Publish(context.Background(), m)
+			err := c.Publish(context.Background(), tc.nodeSubject, []byte("test"))
 			if err != nil {
 				errchan <- err
 				return
@@ -293,7 +288,6 @@ func TestCourier_Request(t *testing.T) {
 		nodeSubject     string
 		messageSubject  string
 		expectedFailure bool
-		messageFunc     createMessage
 	}
 
 	tests := []test{
@@ -303,7 +297,6 @@ func TestCourier_Request(t *testing.T) {
 			nodeSubject:     "test",
 			messageSubject:  "test",
 			expectedFailure: false,
-			messageFunc:     NewReqMessage,
 		},
 		{
 			nodeCount:       1,
@@ -311,7 +304,6 @@ func TestCourier_Request(t *testing.T) {
 			nodeSubject:     "test",
 			messageSubject:  "fail",
 			expectedFailure: true,
-			messageFunc:     NewReqMessage,
 		},
 		{
 			nodeCount:       1,
@@ -319,7 +311,6 @@ func TestCourier_Request(t *testing.T) {
 			nodeSubject:     "test",
 			messageSubject:  "fail",
 			expectedFailure: true,
-			messageFunc:     NewReqMessage,
 		},
 		{
 			nodeCount:       1,
@@ -327,13 +318,11 @@ func TestCourier_Request(t *testing.T) {
 			nodeSubject:     "test",
 			messageSubject:  "fail",
 			expectedFailure: true,
-			messageFunc:     NewPubMessage,
 		},
 	}
 
 	for _, tc := range tests {
 		server := NewMockServer(bufconn.Listen(1024*1024), false)
-		m := tc.messageFunc(uuid.NewString(), tc.messageSubject, []byte("test"))
 		nodes := CreateTestNodes(tc.nodeCount, &TestNodeOptions{})
 		c, err := NewCourier(
 			WithObserver(newMockObserver(make(chan []Noder), false)),
@@ -367,7 +356,7 @@ func TestCourier_Request(t *testing.T) {
 		done := make(chan bool)
 		errchan := make(chan error)
 		go func() {
-			err := c.Request(context.Background(), m)
+			err := c.Request(context.Background(), tc.messageSubject, []byte("test"))
 			if err != nil {
 				errchan <- err
 				return
@@ -409,7 +398,6 @@ func TestCourier_Response(t *testing.T) {
 		nodeSubject     string
 		badMessageId    bool
 		expectedFailure bool
-		messageFunc     createMessage
 	}
 
 	tests := []test{
@@ -419,7 +407,6 @@ func TestCourier_Response(t *testing.T) {
 			nodeSubject:     "test",
 			badMessageId:    false,
 			expectedFailure: false,
-			messageFunc:     NewRespMessage,
 		},
 		{
 			nodeCount:       1,
@@ -427,7 +414,6 @@ func TestCourier_Response(t *testing.T) {
 			nodeSubject:     "test",
 			badMessageId:    true,
 			expectedFailure: true,
-			messageFunc:     NewRespMessage,
 		},
 		{
 			nodeCount:       1,
@@ -435,7 +421,6 @@ func TestCourier_Response(t *testing.T) {
 			nodeSubject:     "test",
 			badMessageId:    false,
 			expectedFailure: true,
-			messageFunc:     NewPubMessage,
 		},
 	}
 
@@ -472,7 +457,7 @@ func TestCourier_Response(t *testing.T) {
 
 			c.clientNodes.Add(cn)
 
-			m := tc.messageFunc(uuid.NewString(), tc.nodeSubject, []byte("test"))
+			m := NewRespMessage(uuid.NewString(), tc.nodeSubject, []byte("test"))
 
 			if tc.badMessageId {
 				c.responses.Push(ResponseInfo{
@@ -493,7 +478,7 @@ func TestCourier_Response(t *testing.T) {
 		errchan := make(chan error)
 		go func() {
 			for _, m := range messageList {
-				err := c.Response(context.Background(), m)
+				err := c.Response(context.Background(), m.Id, m.Subject, m.Content)
 				if err != nil {
 					errchan <- err
 					return
