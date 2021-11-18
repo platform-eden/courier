@@ -87,7 +87,7 @@ type Courier struct {
 	Observer                Observer
 	attemptMetadata         attemptMetadata
 	DialOptions             []grpc.DialOption
-	observerChannel         chan []Node
+	observerChannel         chan []Noder
 	newNodeChannel          chan Node
 	staleNodeChannel        chan Node
 	failedConnectionChannel chan Node
@@ -115,7 +115,7 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 		},
 		DialOptions:             []grpc.DialOption{},
 		Observer:                nil,
-		observerChannel:         make(chan []Node),
+		observerChannel:         make(chan []Noder),
 		newNodeChannel:          make(chan Node),
 		staleNodeChannel:        make(chan Node),
 		failedConnectionChannel: make(chan Node),

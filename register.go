@@ -6,23 +6,23 @@ import (
 )
 
 type Observer interface {
-	Observe() (chan []Node, error)
+	Observe() (chan []Noder, error)
 	AddNode(*Node) error
 	RemoveNode(*Node) error
 }
 
 // registerNodes either receives new nodes to be sifted and sent out of the newChannel or receives nodes that could not receive a message that need to be blacklisted.
-func registerNodes(ochan <-chan []Node, nchan chan Node, schan chan Node, fchan <-chan Node, blacklist NodeMapper, current NodeMapper) {
+func registerNodes(ochan <-chan []Noder, nchan chan Node, schan chan Node, fchan <-chan Node, blacklist NodeMapper, current NodeMapper) {
 	for {
 		select {
-		case nodes := <-ochan:
-			blacklisted, cll := updateNodes(nodes, nchan, schan, blacklist, current)
+		case noders := <-ochan:
+			blacklisted, cll := updateNodes(noders, nchan, schan, blacklist, current)
 			blacklist.Update(<-blacklisted)
 			current.Update(<-cll)
 
 		case n := <-fchan:
 			blacklist.Add(n)
-			current.Remove(n.Id)
+			current.Remove(n.id)
 		}
 	}
 
@@ -32,16 +32,17 @@ func registerNodes(ochan <-chan []Node, nchan chan Node, schan chan Node, fchan 
 }
 
 // updateNodes compares a list of nodes with blacklisted nodes and current nodes.  Any new nodes are sent through the nodeChannel.  Returns a new blacklist and current node list.
-func updateNodes(nodes []Node, nchan chan Node, schan chan Node, blacklist NodeMapper, current NodeMapper) (<-chan Node, <-chan Node) {
+func updateNodes(noderList []Noder, nchan chan Node, schan chan Node, blacklist NodeMapper, current NodeMapper) (<-chan Node, <-chan Node) {
 	blacklisted := make(chan Node, blacklist.Length()+1)
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 
-	gout := generate(nodes...)
-	cblout := compareBlackList(gout, blacklisted, blacklist)
+	noders := generateNoders(noderList...)
+	nodes := nodersToNodes(noders)
+	cblout := compareBlackList(nodes, blacklisted, blacklist)
 	new, active, stale := compareCurrentList(cblout, current)
 
-	buffactive := nodeBuffer(active, len(nodes)+1)
+	buffactive := nodeBuffer(active, len(noderList)+1)
 	go sendNodes(new, nchan, wg)
 	go sendNodes(stale, schan, wg)
 
@@ -50,12 +51,23 @@ func updateNodes(nodes []Node, nchan chan Node, schan chan Node, blacklist NodeM
 	return blacklisted, buffactive
 }
 
-// generate takes a set of nodes and returns a channel of those nodes
-func generate(nodes ...Node) <-chan Node {
+func generateNoders(noders ...Noder) <-chan Noder {
+	out := make(chan Noder)
+	go func() {
+		for _, n := range noders {
+			out <- n
+		}
+		close(out)
+	}()
+
+	return out
+}
+
+func nodersToNodes(in <-chan Noder) <-chan Node {
 	out := make(chan Node)
 	go func() {
-		for _, n := range nodes {
-			out <- n
+		for n := range in {
+			out <- *NewNode(n.Id(), n.Address(), n.Port(), n.Subscribed(), n.Broadcasted())
 		}
 		close(out)
 	}()
@@ -70,9 +82,9 @@ func compareBlackList(in <-chan Node, blacklisted chan Node, blacklist NodeMappe
 	go func() {
 		for n := range in {
 			if blacklist.Length() != 0 {
-				_, exist := blacklist.Node(n.Id)
+				_, exist := blacklist.Node(n.id)
 				if exist {
-					log.Printf("Node %s is currently blacklisted - skipping node", n.Id)
+					log.Printf("Node %s is currently blacklisted - skipping node", n.id)
 					blacklisted <- n
 					continue
 				}
@@ -97,9 +109,9 @@ func compareCurrentList(in <-chan Node, current NodeMapper) (<-chan Node, <-chan
 	go func() {
 		for n := range in {
 			active <- n
-			_, exist := current.Node(n.Id)
+			_, exist := current.Node(n.id)
 			if exist {
-				current.Remove(n.Id)
+				current.Remove(n.id)
 				continue
 			}
 			out <- n

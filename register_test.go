@@ -45,7 +45,7 @@ func TestRegisterNodes(t *testing.T) {
 		nodes := append(bln, cln...)
 		nodes = append(nodes, nn...)
 		fn := CreateTestNodes(1, &TestNodeOptions{})[0]
-		ochan := make(chan []Node)
+		ochan := make(chan []Noder)
 		nchan := make(chan Node)
 		schan := make(chan Node)
 		fchan := make(chan Node)
@@ -59,9 +59,9 @@ func TestRegisterNodes(t *testing.T) {
 
 		count := 0
 		for {
-			_, exist1 := blacklist.Node(fn.Id)
+			_, exist1 := blacklist.Node(fn.id)
 			if exist1 {
-				_, exist2 := current.Node(fn.Id)
+				_, exist2 := current.Node(fn.id)
 				if !exist2 {
 					break
 				}
@@ -74,7 +74,13 @@ func TestRegisterNodes(t *testing.T) {
 			count++
 		}
 
-		ochan <- RemovePointers(nodes)
+		noders := []Noder{}
+
+		for _, n := range nodes {
+			noders = append(noders, n)
+		}
+
+		ochan <- noders
 		count = 0
 
 	nodeloop:
@@ -155,8 +161,13 @@ func TestUpdateNodes(t *testing.T) {
 		nodes = append(nodes, nn...)
 		nodeChannel := make(chan Node, tc.newNodeCount)
 		staleChannel := make(chan Node, tc.staleNodeCount)
+		noders := []Noder{}
 
-		bll, cll := updateNodes(RemovePointers(nodes), nodeChannel, staleChannel, blacklist, current)
+		for _, n := range nodes {
+			noders = append(noders, n)
+		}
+
+		bll, cll := updateNodes(noders, nodeChannel, staleChannel, blacklist, current)
 		close(nodeChannel)
 		close(staleChannel)
 
@@ -190,9 +201,9 @@ func TestUpdateNodes(t *testing.T) {
 
 /*************************************************************
 Expected Outcomes:
-- all nodes passed in should be passed out of the out channel
+- all noders passed in should be passed out of the out channel as nodes
 *************************************************************/
-func TestGenerate(t *testing.T) {
+func TestGenerateNoders(t *testing.T) {
 	type test struct {
 		count int
 	}
@@ -211,7 +222,13 @@ func TestGenerate(t *testing.T) {
 
 	for _, tc := range tests {
 		nodes := CreateTestNodes(tc.count, &TestNodeOptions{})
-		out := generate(RemovePointers(nodes)...)
+		noders := []Noder{}
+
+		for _, n := range nodes {
+			noders = append(noders, n)
+		}
+
+		out := generateNoders(noders...)
 
 		count := 0
 		for range out {
@@ -294,9 +311,9 @@ func TestCompareBlackList(t *testing.T) {
 		}
 
 		for _, n := range outNodes {
-			_, exist := blacklist.Node(n.Id)
+			_, exist := blacklist.Node(n.id)
 			if exist {
-				t.Fatalf("node %s was blacklisted but was sent through the out channel", n.Id)
+				t.Fatalf("node %s was blacklisted but was sent through the out channel", n.id)
 			}
 		}
 

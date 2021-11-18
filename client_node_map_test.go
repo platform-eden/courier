@@ -21,9 +21,9 @@ func TestClientNodeMap_Nodes(t *testing.T) {
 	}
 
 	for _, n := range nodes {
-		_, exist := b.nodes[n.Id]
+		_, exist := b.nodes[n.id]
 		if !exist {
-			t.Fatalf("expected node with id %s to exist but it didn't", n.Id)
+			t.Fatalf("expected node with id %s to exist but it didn't", n.id)
 		}
 	}
 }
@@ -62,7 +62,7 @@ func TestClientNodeMap_Remove(t *testing.T) {
 	}
 
 	for _, n := range nodes {
-		b.Remove(n.Id)
+		b.Remove(n.id)
 	}
 
 	bl := b.Length()
