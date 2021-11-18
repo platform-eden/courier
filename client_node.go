@@ -15,9 +15,9 @@ type clientNode struct {
 }
 
 func newClientNode(node Node, currrentId string, options ...grpc.DialOption) (*clientNode, error) {
-	conn, err := grpc.Dial(fmt.Sprintf("%s:%s", node.Address, node.Port), options...)
+	conn, err := grpc.Dial(fmt.Sprintf("%s:%s", node.address, node.port), options...)
 	if err != nil {
-		return nil, fmt.Errorf("could not create connection at %s: %s", fmt.Sprintf("%s:%s", node.Address, node.Port), err)
+		return nil, fmt.Errorf("could not create connection at %s: %s", fmt.Sprintf("%s:%s", node.address, node.port), err)
 	}
 
 	n := clientNode{
@@ -74,7 +74,7 @@ func (c *clientNode) sendRequestMessage(ctx context.Context, m Message) error {
 	_, err := proto.NewMessageServerClient(c.connection).RequestMessage(ctx, &proto.RequestMessageRequest{
 		Message: &proto.RequestMessage{
 			Id:      m.Id,
-			NodeId:  c.Id,
+			NodeId:  c.id,
 			Subject: m.Subject,
 			Content: m.Content,
 		},

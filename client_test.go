@@ -105,8 +105,8 @@ func TestListenForNewNodes(t *testing.T) {
 
 		checkSubMap := func(nodes []*Node, smap *subscriberMap) bool {
 			for _, n := range nodes {
-				for _, subject := range n.SubscribedSubjects {
-					exist := smap.CheckForSubscriber(subject, n.Id)
+				for _, subject := range n.subscribedSubjects {
+					exist := smap.CheckForSubscriber(subject, n.id)
 					if !exist {
 						return false
 					}
@@ -163,7 +163,7 @@ func TestListenForStaleNodes(t *testing.T) {
 		schan := make(chan Node)
 
 		for _, n := range nodes {
-			subMap.Add(n.Id, n.SubscribedSubjects...)
+			subMap.Add(n.id, n.subscribedSubjects...)
 			nodeMap.Add(clientNode{
 				Node: *n,
 			})
@@ -180,8 +180,8 @@ func TestListenForStaleNodes(t *testing.T) {
 
 		checkSubMap := func(nodes []*Node, smap *subscriberMap) bool {
 			for _, n := range nodes {
-				for _, subject := range n.SubscribedSubjects {
-					exist := smap.CheckForSubscriber(subject, n.Id)
+				for _, subject := range n.subscribedSubjects {
+					exist := smap.CheckForSubscriber(subject, n.id)
 					if exist {
 						return false
 					}
@@ -361,7 +361,7 @@ func TestIdToClientNodes(t *testing.T) {
 				t.Fatalf("could not create clientNode: %s", err)
 			}
 			nodeMap.Add(*cn)
-			ids = append(ids, n.Id)
+			ids = append(ids, n.id)
 		}
 
 		for i := 0; i < tc.invalidCount; i++ {

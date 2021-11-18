@@ -33,7 +33,7 @@ func TestNewClientNode(t *testing.T) {
 
 	for _, tc := range tests {
 		n := CreateTestNodes(1, &TestNodeOptions{})[0]
-		n.Port = tc.port
+		n.port = tc.port
 		_, err := newClientNode(*n, uuid.NewString(), tc.options...)
 		if err != nil {
 			if tc.expectedFailure {

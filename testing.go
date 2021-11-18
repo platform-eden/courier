@@ -190,11 +190,11 @@ func NewLocalGRPCClient(target string, bufDialer func(context.Context, string) (
 }
 
 type MockObserver struct {
-	observeChannel chan []Node
+	observeChannel chan []Noder
 	fail           bool
 }
 
-func newMockObserver(ochan chan []Node, fail bool) *MockObserver {
+func newMockObserver(ochan chan []Noder, fail bool) *MockObserver {
 	o := MockObserver{
 		observeChannel: ochan,
 		fail:           fail,
@@ -203,7 +203,7 @@ func newMockObserver(ochan chan []Node, fail bool) *MockObserver {
 	return &o
 }
 
-func (o *MockObserver) Observe() (chan []Node, error) {
+func (o *MockObserver) Observe() (chan []Noder, error) {
 	if o.fail {
 		return nil, errors.New("fail")
 	}

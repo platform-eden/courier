@@ -34,7 +34,7 @@ func (nm *clientNodeMap) Add(n clientNode) {
 	nm.lock.Lock()
 	defer nm.lock.Unlock()
 
-	nm.nodes[n.Id] = n
+	nm.nodes[n.id] = n
 }
 
 func (nm *clientNodeMap) Remove(id string) {

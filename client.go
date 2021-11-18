@@ -35,20 +35,20 @@ func listenForNewNodes(nodeChannel chan Node, nodeMap ClientNodeMapper, subMap S
 	for n := range nodeChannel {
 		cn, err := newClientNode(n, currentId, options...)
 		if err != nil {
-			log.Printf("skipping %s, couldn't create client node: %s", n.Id, err)
+			log.Printf("skipping %s, couldn't create client node: %s", n.id, err)
 			continue
 		}
 
 		nodeMap.Add(*cn)
-		subMap.Add(n.Id, n.SubscribedSubjects...)
+		subMap.Add(n.id, n.subscribedSubjects...)
 	}
 }
 
 // listenForStaleNodes takes nodes passed in and removes them from a NodeMapper and SubMapper
 func listenForStaleNodes(staleChannel chan Node, nodeMap ClientNodeMapper, subMap SubMapper) {
 	for n := range staleChannel {
-		nodeMap.Remove(n.Id)
-		subMap.Remove(n.Id, n.SubscribedSubjects...)
+		nodeMap.Remove(n.id)
+		subMap.Remove(n.id, n.subscribedSubjects...)
 	}
 }
 
@@ -149,7 +149,7 @@ func forwardFailedConnections(in <-chan Node, fchan chan Node, schan chan Node) 
 
 	go func() {
 		for n := range in {
-			log.Printf("failed creating connection to %s:%s - will now be removing and blacklisting %s\n", n.Address, n.Port, n.Id)
+			log.Printf("failed creating connection to %s:%s - will now be removing and blacklisting %s\n", n.address, n.port, n.id)
 
 			schan <- n
 			fchan <- n

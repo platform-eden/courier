@@ -29,7 +29,7 @@ func TestNewCourier(t *testing.T) {
 
 	tests := []test{
 		{
-			observer:        newMockObserver(make(chan []Node), false),
+			observer:        newMockObserver(make(chan []Noder), false),
 			dialOptions:     []grpc.DialOption{grpc.WithInsecure()},
 			hostname:        "test",
 			port:            "3000",
@@ -45,7 +45,7 @@ func TestNewCourier(t *testing.T) {
 			expectedFailure: true,
 		},
 		{
-			observer:        newMockObserver(make(chan []Node), false),
+			observer:        newMockObserver(make(chan []Noder), false),
 			dialOptions:     []grpc.DialOption{grpc.WithInsecure()},
 			hostname:        "",
 			port:            "3002",
@@ -53,7 +53,7 @@ func TestNewCourier(t *testing.T) {
 			expectedFailure: false,
 		},
 		{
-			observer:        newMockObserver(make(chan []Node), false),
+			observer:        newMockObserver(make(chan []Noder), false),
 			dialOptions:     []grpc.DialOption{},
 			hostname:        "test",
 			port:            "3003",
@@ -61,7 +61,7 @@ func TestNewCourier(t *testing.T) {
 			expectedFailure: false,
 		},
 		{
-			observer:        newMockObserver(make(chan []Node), true),
+			observer:        newMockObserver(make(chan []Noder), true),
 			dialOptions:     []grpc.DialOption{grpc.WithInsecure()},
 			hostname:        "test",
 			port:            "3004",
@@ -126,17 +126,17 @@ func TestCourier_Start(t *testing.T) {
 	tests := []test{
 		{
 			port:            "asdfasdf",
-			observer:        newMockObserver(make(chan []Node), false),
+			observer:        newMockObserver(make(chan []Noder), false),
 			expectedFailure: true,
 		},
 		{
 			port:            "3000",
-			observer:        newMockObserver(make(chan []Node), true),
+			observer:        newMockObserver(make(chan []Noder), true),
 			expectedFailure: true,
 		},
 		{
 			port:            "3001",
-			observer:        newMockObserver(make(chan []Node), false),
+			observer:        newMockObserver(make(chan []Noder), false),
 			expectedFailure: false,
 		},
 	}
@@ -146,7 +146,7 @@ func TestCourier_Start(t *testing.T) {
 		broad := []string{"broad1", "broad2", "broad3"}
 
 		c, err := NewCourier(
-			WithObserver(newMockObserver(make(chan []Node), false)),
+			WithObserver(newMockObserver(make(chan []Noder), false)),
 			Subscribes(sub...),
 			Broadcasts(broad...),
 			WithHostname("test.com"),
@@ -189,7 +189,6 @@ func TestCourier_Publish(t *testing.T) {
 		nodeSubject     string
 		messageSubject  string
 		expectedFailure bool
-		messageFunc     createMessage
 	}
 
 	tests := []test{
@@ -199,7 +198,6 @@ func TestCourier_Publish(t *testing.T) {
 			nodeSubject:     "test",
 			messageSubject:  "test",
 			expectedFailure: false,
-			messageFunc:     NewPubMessage,
 		},
 		{
 			nodeCount:       1,
@@ -207,7 +205,6 @@ func TestCourier_Publish(t *testing.T) {
 			nodeSubject:     "test",
 			messageSubject:  "fail",
 			expectedFailure: true,
-			messageFunc:     NewPubMessage,
 		},
 		{
 			nodeCount:       1,
@@ -215,16 +212,14 @@ func TestCourier_Publish(t *testing.T) {
 			nodeSubject:     "test",
 			messageSubject:  "fail",
 			expectedFailure: true,
-			messageFunc:     NewReqMessage,
 		},
 	}
 
 	for _, tc := range tests {
 		server := NewMockServer(bufconn.Listen(1024*1024), false)
-		m := tc.messageFunc(uuid.NewString(), tc.nodeSubject, []byte("test"))
 		nodes := CreateTestNodes(tc.nodeCount, &TestNodeOptions{})
 		c, err := NewCourier(
-			WithObserver(newMockObserver(make(chan []Node), false)),
+			WithObserver(newMockObserver(make(chan []Noder), false)),
 			WithHostname("test.com"),
 			WithPort(tc.port),
 			WithDialOptions(grpc.WithInsecure()),
@@ -237,7 +232,7 @@ func TestCourier_Publish(t *testing.T) {
 		}
 
 		for _, n := range nodes {
-			c.clientSubscribers.Add(n.Id, tc.nodeSubject)
+			c.clientSubscribers.Add(n.id, tc.nodeSubject)
 			_, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
 			if err != nil {
 				t.Fatalf("could not create grpc client: %s", err)
@@ -255,7 +250,7 @@ func TestCourier_Publish(t *testing.T) {
 		done := make(chan bool)
 		errchan := make(chan error)
 		go func() {
-			err := c.Publish(context.Background(), m)
+			err := c.Publish(context.Background(), tc.nodeSubject, []byte("test"))
 			if err != nil {
 				errchan <- err
 				return
@@ -293,7 +288,6 @@ func TestCourier_Request(t *testing.T) {
 		nodeSubject     string
 		messageSubject  string
 		expectedFailure bool
-		messageFunc     createMessage
 	}
 
 	tests := []test{
@@ -303,7 +297,6 @@ func TestCourier_Request(t *testing.T) {
 			nodeSubject:     "test",
 			messageSubject:  "test",
 			expectedFailure: false,
-			messageFunc:     NewReqMessage,
 		},
 		{
 			nodeCount:       1,
@@ -311,7 +304,6 @@ func TestCourier_Request(t *testing.T) {
 			nodeSubject:     "test",
 			messageSubject:  "fail",
 			expectedFailure: true,
-			messageFunc:     NewReqMessage,
 		},
 		{
 			nodeCount:       1,
@@ -319,7 +311,6 @@ func TestCourier_Request(t *testing.T) {
 			nodeSubject:     "test",
 			messageSubject:  "fail",
 			expectedFailure: true,
-			messageFunc:     NewReqMessage,
 		},
 		{
 			nodeCount:       1,
@@ -327,16 +318,14 @@ func TestCourier_Request(t *testing.T) {
 			nodeSubject:     "test",
 			messageSubject:  "fail",
 			expectedFailure: true,
-			messageFunc:     NewPubMessage,
 		},
 	}
 
 	for _, tc := range tests {
 		server := NewMockServer(bufconn.Listen(1024*1024), false)
-		m := tc.messageFunc(uuid.NewString(), tc.messageSubject, []byte("test"))
 		nodes := CreateTestNodes(tc.nodeCount, &TestNodeOptions{})
 		c, err := NewCourier(
-			WithObserver(newMockObserver(make(chan []Node), false)),
+			WithObserver(newMockObserver(make(chan []Noder), false)),
 			WithHostname("test.com"),
 			WithPort(tc.port),
 			WithDialOptions(grpc.WithInsecure()),
@@ -349,7 +338,7 @@ func TestCourier_Request(t *testing.T) {
 		}
 
 		for _, n := range nodes {
-			c.clientSubscribers.Add(n.Id, tc.nodeSubject)
+			c.clientSubscribers.Add(n.id, tc.nodeSubject)
 			_, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
 			if err != nil {
 				t.Fatalf("could not create grpc client: %s", err)
@@ -367,7 +356,7 @@ func TestCourier_Request(t *testing.T) {
 		done := make(chan bool)
 		errchan := make(chan error)
 		go func() {
-			err := c.Request(context.Background(), m)
+			err := c.Request(context.Background(), tc.messageSubject, []byte("test"))
 			if err != nil {
 				errchan <- err
 				return
@@ -409,7 +398,6 @@ func TestCourier_Response(t *testing.T) {
 		nodeSubject     string
 		badMessageId    bool
 		expectedFailure bool
-		messageFunc     createMessage
 	}
 
 	tests := []test{
@@ -419,7 +407,6 @@ func TestCourier_Response(t *testing.T) {
 			nodeSubject:     "test",
 			badMessageId:    false,
 			expectedFailure: false,
-			messageFunc:     NewRespMessage,
 		},
 		{
 			nodeCount:       1,
@@ -427,7 +414,6 @@ func TestCourier_Response(t *testing.T) {
 			nodeSubject:     "test",
 			badMessageId:    true,
 			expectedFailure: true,
-			messageFunc:     NewRespMessage,
 		},
 		{
 			nodeCount:       1,
@@ -435,7 +421,6 @@ func TestCourier_Response(t *testing.T) {
 			nodeSubject:     "test",
 			badMessageId:    false,
 			expectedFailure: true,
-			messageFunc:     NewPubMessage,
 		},
 	}
 
@@ -443,7 +428,7 @@ func TestCourier_Response(t *testing.T) {
 		server := NewMockServer(bufconn.Listen(1024*1024), false)
 		nodes := CreateTestNodes(tc.nodeCount, &TestNodeOptions{})
 		c, err := NewCourier(
-			WithObserver(newMockObserver(make(chan []Node), false)),
+			WithObserver(newMockObserver(make(chan []Noder), false)),
 			WithHostname("test.com"),
 			WithPort(tc.port),
 			WithDialOptions(grpc.WithInsecure()),
@@ -458,7 +443,7 @@ func TestCourier_Response(t *testing.T) {
 		var messageList []Message
 
 		for _, n := range nodes {
-			c.clientSubscribers.Add(n.Id, tc.nodeSubject)
+			c.clientSubscribers.Add(n.id, tc.nodeSubject)
 			_, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
 			if err != nil {
 				t.Fatalf("could not create grpc client: %s", err)
@@ -472,17 +457,17 @@ func TestCourier_Response(t *testing.T) {
 
 			c.clientNodes.Add(cn)
 
-			m := tc.messageFunc(uuid.NewString(), tc.nodeSubject, []byte("test"))
+			m := NewRespMessage(uuid.NewString(), tc.nodeSubject, []byte("test"))
 
 			if tc.badMessageId {
 				c.responses.Push(ResponseInfo{
 					MessageId: "badId",
-					NodeId:    n.Id,
+					NodeId:    n.id,
 				})
 			} else {
 				c.responses.Push(ResponseInfo{
 					MessageId: m.Id,
-					NodeId:    n.Id,
+					NodeId:    n.id,
 				})
 			}
 
@@ -493,7 +478,7 @@ func TestCourier_Response(t *testing.T) {
 		errchan := make(chan error)
 		go func() {
 			for _, m := range messageList {
-				err := c.Response(context.Background(), m)
+				err := c.Response(context.Background(), m.Id, m.Subject, m.Content)
 				if err != nil {
 					errchan <- err
 					return
@@ -527,7 +512,7 @@ Expected Outcomes:
 **************************************************************/
 func TestCourier_Subscribe(t *testing.T) {
 	c, err := NewCourier(
-		WithObserver(newMockObserver(make(chan []Node), false)),
+		WithObserver(newMockObserver(make(chan []Noder), false)),
 		WithHostname("test.com"),
 		WithPort("3008"),
 		WithDialOptions(grpc.WithInsecure()),

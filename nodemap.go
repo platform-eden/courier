@@ -47,7 +47,7 @@ func (nm *NodeMap) Add(n Node) {
 	nm.lock.Lock()
 	defer nm.lock.Unlock()
 
-	nm.nodes[n.Id] = n
+	nm.nodes[n.id] = n
 }
 
 func (nm *NodeMap) Remove(id string) {
@@ -65,7 +65,7 @@ func (nm *NodeMap) Update(nodes ...Node) {
 
 	for _, n := range nodes {
 
-		new[n.Id] = n
+		new[n.id] = n
 	}
 
 	nm.nodes = new
