@@ -24,31 +24,49 @@ type attemptMetadata struct {
 }
 
 // listenForResponseInfo takes ResponseInfo through a channel and pushes them into a responseMap
-func listenForResponseInfo(responses chan ResponseInfo, respMap ResponseMapper) {
-	for response := range responses {
-		respMap.Push(response)
+func listenForResponseInfo(ctx context.Context, wg *sync.WaitGroup, responseChannel chan ResponseInfo, respMap ResponseMapper) {
+	defer wg.Done()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case response := <-responseChannel:
+			respMap.Push(response)
+		}
 	}
 }
 
 // listenForNewNodes takes nodes passed through a channel and adds them to a NodeMapper and SubMapper
-func listenForNewNodes(nodeChannel chan Node, nodeMap ClientNodeMapper, subMap SubMapper, currentId string, options ...grpc.DialOption) {
-	for n := range nodeChannel {
-		cn, err := newClientNode(n, currentId, options...)
-		if err != nil {
-			log.Printf("skipping %s, couldn't create client node: %s", n.id, err)
-			continue
-		}
+func listenForNewNodes(ctx context.Context, wg *sync.WaitGroup, nodeChannel chan Node, nodeMap ClientNodeMapper, subMap SubMapper, currentId string, options ...grpc.DialOption) {
+	defer wg.Done()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case n := <-nodeChannel:
+			cn, err := newClientNode(n, currentId, options...)
+			if err != nil {
+				log.Printf("skipping %s, couldn't create client node: %s", n.id, err)
+				continue
+			}
 
-		nodeMap.Add(*cn)
-		subMap.Add(n.id, n.subscribedSubjects...)
+			nodeMap.Add(*cn)
+			subMap.Add(n.id, n.subscribedSubjects...)
+		}
 	}
 }
 
 // listenForStaleNodes takes nodes passed in and removes them from a NodeMapper and SubMapper
-func listenForStaleNodes(staleChannel chan Node, nodeMap ClientNodeMapper, subMap SubMapper) {
-	for n := range staleChannel {
-		nodeMap.Remove(n.id)
-		subMap.Remove(n.id, n.subscribedSubjects...)
+func listenForStaleNodes(ctx context.Context, wg *sync.WaitGroup, staleChannel chan Node, nodeMap ClientNodeMapper, subMap SubMapper) {
+	defer wg.Done()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case n := <-staleChannel:
+			nodeMap.Remove(n.id)
+			subMap.Remove(n.id, n.subscribedSubjects...)
+		}
 	}
 }
 

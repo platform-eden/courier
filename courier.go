@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -92,6 +93,8 @@ type Courier struct {
 	staleNodeChannel        chan Node
 	failedConnectionChannel chan Node
 	responseChannel         chan ResponseInfo
+	waitGroup               *sync.WaitGroup
+	cancelFunc              context.CancelFunc
 	blacklistNodes          NodeMapper
 	currentNodes            NodeMapper
 	clientNodes             ClientNodeMapper
@@ -120,6 +123,7 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 		staleNodeChannel:        make(chan Node),
 		failedConnectionChannel: make(chan Node),
 		responseChannel:         make(chan ResponseInfo),
+		waitGroup:               &sync.WaitGroup{},
 		blacklistNodes:          NewNodeMap(),
 		currentNodes:            NewNodeMap(),
 		clientNodes:             newClientNodeMap(),
@@ -160,10 +164,13 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 }
 
 func (c *Courier) Start() error {
-	go registerNodes(c.observerChannel, c.newNodeChannel, c.staleNodeChannel, c.failedConnectionChannel, c.blacklistNodes, c.currentNodes)
-	go listenForResponseInfo(c.responseChannel, c.responses)
-	go listenForNewNodes(c.newNodeChannel, c.clientNodes, c.clientSubscribers, c.Id, c.DialOptions...)
-	go listenForStaleNodes(c.staleNodeChannel, c.clientNodes, c.clientSubscribers)
+	ctx, cancel := context.WithCancel(context.Background())
+	c.cancelFunc = cancel
+
+	go registerNodes(ctx, c.waitGroup, c.observerChannel, c.newNodeChannel, c.staleNodeChannel, c.failedConnectionChannel, c.blacklistNodes, c.currentNodes)
+	go listenForResponseInfo(ctx, c.waitGroup, c.responseChannel, c.responses)
+	go listenForNewNodes(ctx, c.waitGroup, c.newNodeChannel, c.clientNodes, c.clientSubscribers, c.Id, c.DialOptions...)
+	go listenForStaleNodes(ctx, c.waitGroup, c.staleNodeChannel, c.clientNodes, c.clientSubscribers)
 
 	err := startMessageServer(c.server, c.Port)
 	if err != nil {

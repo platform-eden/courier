@@ -1,6 +1,7 @@
 package courier
 
 import (
+	"context"
 	"log"
 	"sync"
 )
@@ -12,27 +13,27 @@ type Observer interface {
 }
 
 // registerNodes either receives new nodes to be sifted and sent out of the newChannel or receives nodes that could not receive a message that need to be blacklisted.
-func registerNodes(ochan <-chan []Noder, nchan chan Node, schan chan Node, fchan <-chan Node, blacklist NodeMapper, current NodeMapper) {
+func registerNodes(ctx context.Context, wg *sync.WaitGroup, ochan <-chan []Noder, nchan chan Node, schan chan Node, fchan <-chan Node, blacklist NodeMapper, current NodeMapper) {
+	defer wg.Done()
+
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case noders := <-ochan:
 			blacklisted, cll := updateNodes(noders, nchan, schan, blacklist, current)
-			blacklist.Update(<-blacklisted)
-			current.Update(<-cll)
+			blacklist.Update(blacklisted...)
+			current.Update(cll...)
 
 		case n := <-fchan:
 			blacklist.Add(n)
 			current.Remove(n.id)
 		}
 	}
-
-	//need to implement of graceful shutdown
-	//close(newChannel)
-	//close(staleChannel)
 }
 
 // updateNodes compares a list of nodes with blacklisted nodes and current nodes.  Any new nodes are sent through the nodeChannel.  Returns a new blacklist and current node list.
-func updateNodes(noderList []Noder, nchan chan Node, schan chan Node, blacklist NodeMapper, current NodeMapper) (<-chan Node, <-chan Node) {
+func updateNodes(noderList []Noder, nchan chan Node, schan chan Node, blacklist NodeMapper, current NodeMapper) ([]Node, []Node) {
 	blacklisted := make(chan Node, blacklist.Length()+1)
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
@@ -48,7 +49,16 @@ func updateNodes(noderList []Noder, nchan chan Node, schan chan Node, blacklist 
 
 	wg.Wait()
 
-	return blacklisted, buffactive
+	return nodeChannelToList(blacklisted), nodeChannelToList(buffactive)
+}
+
+func nodeChannelToList(in <-chan Node) []Node {
+	nodeList := []Node{}
+	for n := range in {
+		nodeList = append(nodeList, n)
+	}
+
+	return nodeList
 }
 
 func generateNoders(noders ...Noder) <-chan Noder {
