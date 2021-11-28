@@ -175,8 +175,6 @@ func TestCourier_Start(t *testing.T) {
 	}
 }
 
-type createMessage func(string, string, []byte) Message
-
 /**************************************************************
 Expected Outcomes:
 - should return an error if the message passed doesn't have a topic registered by client nodes

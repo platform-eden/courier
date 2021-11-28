@@ -166,6 +166,7 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 func (c *Courier) Start() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	c.cancelFunc = cancel
+	c.waitGroup.Add(4)
 
 	go registerNodes(ctx, c.waitGroup, c.observerChannel, c.newNodeChannel, c.staleNodeChannel, c.failedConnectionChannel, c.blacklistNodes, c.currentNodes)
 	go listenForResponseInfo(ctx, c.waitGroup, c.responseChannel, c.responses)
@@ -189,6 +190,13 @@ func (c *Courier) Start() error {
 
 func (c *Courier) Stop() {
 	c.server.GracefulStop()
+	c.cancelFunc()
+	c.waitGroup.Wait()
+	close(c.observerChannel)
+	close(c.responseChannel)
+	close(c.staleNodeChannel)
+	close(c.newNodeChannel)
+	close(c.failedConnectionChannel)
 }
 
 func (c *Courier) Publish(ctx context.Context, subject string, content []byte) error {
