@@ -4,14 +4,18 @@ import (
 	"fmt"
 )
 
-type ResponseMapper interface {
-	Push(ResponseInfo)
-	Pop(string) (string, error)
-}
-
 type responseMap struct {
 	responses map[string]string
 	lock      *TicketLock
+}
+
+type UnregisteredResponseError struct {
+	Method    string
+	MessageId string
+}
+
+func (err *UnregisteredResponseError) Error() string {
+	return fmt.Sprintf("%s: no response exists with id %s", err.Method, err.MessageId)
 }
 
 func newResponseMap() *responseMap {
@@ -36,7 +40,10 @@ func (r *responseMap) Pop(messageId string) (string, error) {
 
 	nodeId, ok := r.responses[messageId]
 	if !ok {
-		return "", fmt.Errorf("response does not exist with %s as an id", messageId)
+		return "", &UnregisteredResponseError{
+			Method:    "Pop",
+			MessageId: messageId,
+		}
 	}
 
 	delete(r.responses, messageId)

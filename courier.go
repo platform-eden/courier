@@ -2,7 +2,6 @@ package courier
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -11,6 +10,65 @@ import (
 	"github.com/platform-edn/courier/proto"
 	"google.golang.org/grpc"
 )
+
+type channelMapper interface {
+	Add(string) <-chan Message
+	Subscriptions(string) ([]chan Message, error)
+	Close()
+}
+
+type ResponseMapper interface {
+	Push(ResponseInfo)
+	Pop(string) (string, error)
+}
+
+type SubMapper interface {
+	Add(string, ...string)
+	Remove(string, ...string)
+	Subscribers(string) ([]string, error)
+}
+
+type NodeMapper interface {
+	Node(string) (Node, bool)
+	Nodes() map[string]Node
+	Update(...Node)
+	Add(Node)
+	Remove(string)
+	Length() int
+}
+
+type ClientNodeMapper interface {
+	Node(string) (clientNode, bool)
+	Add(clientNode)
+	Remove(string)
+	Length() int
+}
+
+type NoObserverError struct {
+	Method string
+}
+
+func (err *NoObserverError) Error() string {
+	return fmt.Sprintf("%s: observer must be set", err.Method)
+}
+
+type SendCourierMessageError struct {
+	Method string
+	Err    error
+}
+
+func (err *SendCourierMessageError) Error() string {
+	return fmt.Sprintf("%s: %s", err.Method, err.Err)
+}
+
+type CourierStartError struct {
+	Method string
+	Err    error
+}
+
+func (err *CourierStartError) Error() string {
+	return fmt.Sprintf("%s: %s", err.Method, err.Err)
+}
 
 // CourierOption is a set of options that may be passed as parameters when creating a Courier object
 type CourierOption func(c *Courier)
@@ -138,7 +196,9 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 	}
 
 	if c.Observer == nil {
-		return nil, errors.New("observer must be set")
+		return nil, &NoObserverError{
+			Method: "NewCourier",
+		}
 	}
 
 	if c.Hostname == "" {
@@ -156,7 +216,10 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 	if c.StartOnCreation {
 		err := c.Start()
 		if err != nil {
-			return nil, fmt.Errorf("could not start Courier service: %s", err)
+			return nil, &CourierStartError{
+				Method: "NewCourier",
+				Err:    err,
+			}
 		}
 	}
 
@@ -175,14 +238,20 @@ func (c *Courier) Start() error {
 
 	err := startMessageServer(c.server, c.Port)
 	if err != nil {
-		return fmt.Errorf("could not start server %s", err)
+		return &CourierStartError{
+			Method: "Start",
+			Err:    err,
+		}
 	}
 
 	n := NewNode(c.Id, c.Hostname, c.Port, c.SubscribedSubjects, c.BroadcastedSubjects)
 
 	err = c.Observer.AddNode(n)
 	if err != nil {
-		return fmt.Errorf("could not add node: %s", err)
+		return &CourierStartError{
+			Method: "Start",
+			Err:    err,
+		}
 	}
 
 	return nil
@@ -204,7 +273,10 @@ func (c *Courier) Publish(ctx context.Context, subject string, content []byte) e
 
 	ids, err := generateIdsBySubject(msg.Subject, c.clientSubscribers)
 	if err != nil {
-		return fmt.Errorf("couldn't generate ids: %s", err)
+		return &SendCourierMessageError{
+			Method: "Publish",
+			Err:    err,
+		}
 	}
 
 	cnodes := idToClientNodes(ids, c.clientNodes)
@@ -221,7 +293,10 @@ func (c *Courier) Request(ctx context.Context, subject string, content []byte) e
 
 	ids, err := generateIdsBySubject(msg.Subject, c.clientSubscribers)
 	if err != nil {
-		return fmt.Errorf("couldn't generate ids: %s", err)
+		return &SendCourierMessageError{
+			Method: "Request",
+			Err:    err,
+		}
 	}
 
 	cnodes := idToClientNodes(ids, c.clientNodes)
@@ -238,7 +313,10 @@ func (c *Courier) Response(ctx context.Context, id string, subject string, conte
 
 	ids, err := generateIdsByMessage(msg.Id, c.responses)
 	if err != nil {
-		return fmt.Errorf("couldn't generate ids: %s", err)
+		return &SendCourierMessageError{
+			Method: "Response",
+			Err:    err,
+		}
 	}
 
 	cnodes := idToClientNodes(ids, c.clientNodes)

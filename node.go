@@ -1,13 +1,5 @@
 package courier
 
-type Noder interface {
-	Id() string
-	Address() string
-	Subscribed() []string
-	Broadcasted() []string
-	Port() string
-}
-
 type Node struct {
 	id                  string
 	address             string

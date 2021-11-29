@@ -6,6 +6,14 @@ import (
 	"sync"
 )
 
+type Noder interface {
+	Id() string
+	Address() string
+	Subscribed() []string
+	Broadcasted() []string
+	Port() string
+}
+
 type Observer interface {
 	Observe() (chan []Noder, error)
 	AddNode(*Node) error

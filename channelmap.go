@@ -4,15 +4,18 @@ import (
 	"fmt"
 )
 
-type channelMapper interface {
-	Add(string) <-chan Message
-	Subscriptions(string) ([]chan Message, error)
-	Close()
-}
-
 type ChannelMap struct {
 	SubjectChannels map[string][]chan Message
 	Lock            Locker
+}
+
+type UnregisteredChannelSubjectError struct {
+	Method  string
+	Subject string
+}
+
+func (err *UnregisteredChannelSubjectError) Error() string {
+	return fmt.Sprintf("%s: no channels registered for subject %s", err.Method, err.Subject)
 }
 
 func newChannelMap() *ChannelMap {
@@ -40,7 +43,10 @@ func (c *ChannelMap) Subscriptions(subject string) ([]chan Message, error) {
 
 	channels, exist := c.SubjectChannels[subject]
 	if !exist {
-		return nil, fmt.Errorf("no channels for subjects %s", subject)
+		return nil, &UnregisteredChannelSubjectError{
+			Method:  "ChannelMap.Subscriptions",
+			Subject: subject,
+		}
 	}
 
 	return channels, nil

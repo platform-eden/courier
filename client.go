@@ -12,15 +12,21 @@ import (
 
 type Sender interface {
 	sendMessage(ctx context.Context, m Message) error
-	sendPublishMessage(ctx context.Context, m Message) error
-	sendRequestMessage(ctx context.Context, m Message) error
-	sendResponseMessage(ctx context.Context, m Message) error
 	Receiver() Node
 }
 
 type attemptMetadata struct {
 	maxAttempts  int
 	waitInterval time.Duration
+}
+
+type NodeIdGenerationError struct {
+	Method string
+	Err    error
+}
+
+func (err *NodeIdGenerationError) Error() string {
+	return fmt.Sprintf("%s: %s", err.Method, err.Err)
 }
 
 // listenForResponseInfo takes ResponseInfo through a channel and pushes them into a responseMap
@@ -76,7 +82,10 @@ func generateIdsBySubject(subject string, subMap SubMapper) (<-chan string, erro
 
 	ids, err := subMap.Subscribers(subject)
 	if err != nil {
-		return nil, fmt.Errorf("could not get subscribers: %s", err)
+		return nil, &NodeIdGenerationError{
+			Method: "generateIdsBySubject",
+			Err:    err,
+		}
 	}
 
 	go func() {
@@ -95,7 +104,10 @@ func generateIdsByMessage(messageId string, respMap ResponseMapper) (<-chan stri
 
 	id, err := respMap.Pop(messageId)
 	if err != nil {
-		return nil, fmt.Errorf("could not pop message response: %s", err)
+		return nil, &NodeIdGenerationError{
+			Method: "generateIdsByMessage",
+			Err:    err,
+		}
 	}
 
 	out <- id

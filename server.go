@@ -17,6 +17,24 @@ type MessageServer struct {
 	proto.UnimplementedMessageServerServer
 }
 
+type ChannelSubscriptionError struct {
+	Method string
+	Err    error
+}
+
+func (err *ChannelSubscriptionError) Error() string {
+	return fmt.Sprintf("%s: %s", err.Method, err.Err)
+}
+
+type MessageServerStartError struct {
+	Method string
+	Err    error
+}
+
+func (err *MessageServerStartError) Error() string {
+	return fmt.Sprintf("%s: %s", err.Method, err.Err)
+}
+
 func NewMessageServer(rchan chan ResponseInfo, chanMap channelMapper) *MessageServer {
 	m := MessageServer{
 		responseChannel: rchan,
@@ -31,7 +49,10 @@ func (m *MessageServer) PublishMessage(ctx context.Context, request *proto.Publi
 
 	channels, err := m.channelMap.Subscriptions(pub.Subject)
 	if err != nil {
-		return nil, fmt.Errorf("could not get subscriptions for %s: %s", pub.Subject, err)
+		return nil, &ChannelSubscriptionError{
+			Method: "PublishMessage",
+			Err:    err,
+		}
 	}
 
 	cchan := generateMessageChannels(channels)
@@ -53,7 +74,10 @@ func (m *MessageServer) RequestMessage(ctx context.Context, request *proto.Reque
 
 	channels, err := m.channelMap.Subscriptions(req.Subject)
 	if err != nil {
-		return nil, fmt.Errorf("could not get subscriptions for %s: %s", req.Subject, err)
+		return nil, &ChannelSubscriptionError{
+			Method: "RequestMessage",
+			Err:    err,
+		}
 	}
 
 	cchan := generateMessageChannels(channels)
@@ -69,7 +93,10 @@ func (m *MessageServer) ResponseMessage(ctx context.Context, request *proto.Resp
 
 	channels, err := m.channelMap.Subscriptions(resp.Subject)
 	if err != nil {
-		return nil, fmt.Errorf("could not get subscriptions for %s: %s", resp.Subject, err)
+		return nil, &ChannelSubscriptionError{
+			Method: "ResponseMessage",
+			Err:    err,
+		}
 	}
 
 	cchan := generateMessageChannels(channels)
@@ -130,7 +157,10 @@ func localIp() string {
 func startMessageServer(grpcServer *grpc.Server, port string) error {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {
-		return fmt.Errorf("could not listen on port %s: %s", port, err)
+		return &MessageServerStartError{
+			Method: "startMessageServer",
+			Err:    err,
+		}
 	}
 
 	go func() {
