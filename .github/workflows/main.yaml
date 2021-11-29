@@ -16,6 +16,8 @@ jobs:
 
       - name: Run Mage
         uses: magefile/mage-action@v1
+        env:
+          ENV: CI
         with:
           args: -v test
       - name: Push Code Coverage
