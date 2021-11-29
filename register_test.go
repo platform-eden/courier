@@ -33,9 +33,9 @@ func TestRegisterNodes(t *testing.T) {
 			newNodeCount:   25,
 		},
 		{
-			blackListCount: 1000,
-			currentCount:   1000,
-			newNodeCount:   2500,
+			blackListCount: 100,
+			currentCount:   100,
+			newNodeCount:   250,
 		},
 	}
 
@@ -139,12 +139,6 @@ func TestUpdateNodes(t *testing.T) {
 	}
 
 	tests := []test{
-		{
-			blackListCount: 100,
-			currentCount:   100,
-			newNodeCount:   250,
-			staleNodeCount: 100,
-		},
 		{
 			blackListCount: 0,
 			currentCount:   0,
