@@ -22,6 +22,21 @@ func bufDialer(context.Context, string) (net.Conn, error) {
 	return lis.Dial()
 }
 
+func TestMessageServerStartErrorr_Error(t *testing.T) {
+	method := "testMethod"
+	err := fmt.Errorf("test error")
+	e := &MessageServerStartError{
+		Method: method,
+		Err:    err,
+	}
+
+	message := e.Error()
+
+	if message != fmt.Sprintf("%s: %s", method, err) {
+		t.Fatalf("expected error message to be %s but got %s", fmt.Sprintf("%s: %s", method, err), message)
+	}
+}
+
 /**************************************************************
 Expected Outcomes:
 - all subject subscribers should receive a message that is assigned that subject
