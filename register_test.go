@@ -376,9 +376,9 @@ func TestCompareCurrentList(t *testing.T) {
 			currentNodeCount: 10,
 		},
 		{
-			newNodeCount:     1000,
-			staleNodeCount:   500,
-			currentNodeCount: 10000,
+			newNodeCount:     100,
+			staleNodeCount:   50,
+			currentNodeCount: 1000,
 		},
 	}
 
@@ -509,7 +509,7 @@ func TestNodeBuffer(t *testing.T) {
 			size: 10,
 		},
 		{
-			size: 1000,
+			size: 100,
 		},
 	}
 
