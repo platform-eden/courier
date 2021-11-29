@@ -2,7 +2,6 @@ package courier
 
 import (
 	"context"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -141,10 +140,10 @@ func TestUpdateNodes(t *testing.T) {
 
 	tests := []test{
 		{
-			blackListCount: 10000,
-			currentCount:   10000,
-			newNodeCount:   250000,
-			staleNodeCount: 1000,
+			blackListCount: 100,
+			currentCount:   100,
+			newNodeCount:   250,
+			staleNodeCount: 100,
 		},
 		{
 			blackListCount: 0,
@@ -465,9 +464,6 @@ Expected Outcomes:
 - done channel should be sent true after completion
 **************************************************************/
 func TestSendNodes(t *testing.T) {
-	if os.Getenv("ENV") == "CI" {
-		t.Skip("Skipping testing in CI environment")
-	}
 	nc := 5
 	in := make(chan Node)
 	new := make(chan Node, nc)
