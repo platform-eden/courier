@@ -2,6 +2,7 @@ package courier
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -9,6 +10,21 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 )
+
+func TestNodeIdGenerationError_Error(t *testing.T) {
+	method := "testMethod"
+	err := fmt.Errorf("test error")
+	e := &NodeIdGenerationError{
+		Method: method,
+		Err:    err,
+	}
+
+	message := e.Error()
+
+	if message != fmt.Sprintf("%s: %s", method, err) {
+		t.Fatalf("expected error message to be %s but got %s", fmt.Sprintf("%s: %s", method, err), message)
+	}
+}
 
 /**************************************************************
 Expected Outcomes:

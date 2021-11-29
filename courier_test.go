@@ -2,6 +2,7 @@ package courier
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -9,6 +10,49 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
 )
+
+func TestNoObserverError_Error(t *testing.T) {
+	method := "testMethod"
+	e := &NoObserverError{
+		Method: method,
+	}
+
+	message := e.Error()
+
+	if message != fmt.Sprintf("%s: observer must be set", method) {
+		t.Fatalf("expected error message to be %s but got %s", fmt.Sprintf("%s: observer must be set", method), message)
+	}
+}
+
+func TestSendCourierMessageError_Error(t *testing.T) {
+	err := fmt.Errorf("test error")
+	method := "testMethod"
+	e := &SendCourierMessageError{
+		Method: method,
+		Err:    err,
+	}
+
+	message := e.Error()
+
+	if message != fmt.Sprintf("%s: %s", method, err) {
+		t.Fatalf("expected error message to be %s but got %s", fmt.Sprintf("%s: %s", method, err), message)
+	}
+}
+
+func TestCourierStartError_Error(t *testing.T) {
+	err := fmt.Errorf("test error")
+	method := "testMethod"
+	e := &CourierStartError{
+		Method: method,
+		Err:    err,
+	}
+
+	message := e.Error()
+
+	if message != fmt.Sprintf("%s: %s", method, err) {
+		t.Fatalf("expected error message to be %s but got %s", fmt.Sprintf("%s: %s", method, err), message)
+	}
+}
 
 /**************************************************************
 Expected Outcomes:

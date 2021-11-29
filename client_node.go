@@ -15,13 +15,14 @@ type clientNode struct {
 }
 
 type ClientNodeDialError struct {
+	Method   string
 	Hostname string
 	Port     string
 	Err      error
 }
 
 func (err *ClientNodeDialError) Error() string {
-	return fmt.Sprintf("newClientNode: could not create connection at %s:%s: %s", err.Hostname, err.Port, err.Err)
+	return fmt.Sprintf("%s: could not create connection at %s:%s: %s", err.Method, err.Hostname, err.Port, err.Err)
 }
 
 type ClientNodeSendError struct {
@@ -46,6 +47,7 @@ func newClientNode(node Node, currrentId string, options ...grpc.DialOption) (*c
 	conn, err := grpc.Dial(fmt.Sprintf("%s:%s", node.address, node.port), options...)
 	if err != nil {
 		return nil, &ClientNodeDialError{
+			Method:   "newClientNode",
 			Err:      err,
 			Port:     node.port,
 			Hostname: node.address,
