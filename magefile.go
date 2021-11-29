@@ -58,7 +58,7 @@ func Proto() error {
 func Test() error {
 	os.Chdir(baseDir)
 
-	err := sh.Run("go", "test", "-p", "1", "-covermode=atomic", "-coverprofile=coverage.out", "./...")
+	err := sh.Run("go", "test", "-covermode=atomic", "-coverprofile=coverage.out", "./...")
 	if err != nil {
 		return fmt.Errorf("failed unit test: %s", err)
 	}
