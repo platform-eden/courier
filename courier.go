@@ -161,6 +161,7 @@ type Courier struct {
 	internalSubChannels     channelMapper
 	server                  *grpc.Server
 	StartOnCreation         bool
+	running                 bool
 }
 
 // NewCourier creates a new Courier service
@@ -189,6 +190,7 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 		responses:               newResponseMap(),
 		internalSubChannels:     newChannelMap(),
 		StartOnCreation:         true,
+		running:                 false,
 	}
 
 	for _, option := range options {
@@ -254,10 +256,15 @@ func (c *Courier) Start() error {
 		}
 	}
 
+	c.running = true
 	return nil
 }
 
 func (c *Courier) Stop() {
+	if !c.running {
+		return
+	}
+
 	c.server.GracefulStop()
 	c.cancelFunc()
 	c.waitGroup.Wait()
@@ -266,6 +273,7 @@ func (c *Courier) Stop() {
 	close(c.staleNodeChannel)
 	close(c.newNodeChannel)
 	close(c.failedConnectionChannel)
+	c.running = false
 }
 
 func (c *Courier) Publish(ctx context.Context, subject string, content []byte) error {

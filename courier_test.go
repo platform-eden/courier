@@ -219,6 +219,46 @@ func TestCourier_Start(t *testing.T) {
 	}
 }
 
+func Test(t *testing.T) {
+	type test struct {
+		port     string
+		observer Observer
+	}
+
+	tests := []test{
+		{
+			port:     "3000",
+			observer: newMockObserver(make(chan []Noder), false),
+		},
+	}
+
+	for _, tc := range tests {
+		sub := []string{"sub1", "sub2", "sub3"}
+		broad := []string{"broad1", "broad2", "broad3"}
+
+		c, err := NewCourier(
+			WithObserver(newMockObserver(make(chan []Noder), false)),
+			Subscribes(sub...),
+			Broadcasts(broad...),
+			WithHostname("test.com"),
+			WithPort(tc.port),
+			WithDialOptions([]grpc.DialOption{grpc.WithInsecure()}...),
+			WithFailedMessageWaitInterval(time.Second),
+			WithMaxFailedMessageAttempts(5),
+			StartOnCreation(true),
+		)
+		if err != nil {
+			t.Fatalf("expected NewCourier to pass but it failed: %s", err)
+		}
+
+		c.Stop()
+
+		if c.running == true {
+			t.Fatal("expected runnning to be false but it's true")
+		}
+	}
+}
+
 /**************************************************************
 Expected Outcomes:
 - should return an error if the message passed doesn't have a topic registered by client nodes
