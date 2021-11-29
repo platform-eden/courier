@@ -5,15 +5,18 @@ import (
 	"sort"
 )
 
-type SubMapper interface {
-	Add(string, ...string)
-	Remove(string, ...string)
-	Subscribers(string) ([]string, error)
-}
-
 type subscriberMap struct {
 	subjectSubscribers map[string][]string
 	lock               *TicketLock
+}
+
+type UnregisteredSubscriberError struct {
+	Method  string
+	Subject string
+}
+
+func (err *UnregisteredSubscriberError) Error() string {
+	return fmt.Sprintf("%s: no subscribers registered for subject %s", err.Method, err.Subject)
 }
 
 func newSubscriberMap() *subscriberMap {
@@ -62,7 +65,10 @@ func (s *subscriberMap) Subscribers(subject string) ([]string, error) {
 
 	ids, ok := s.subjectSubscribers[subject]
 	if !ok {
-		return nil, fmt.Errorf("subjects %s currently not tracked", subject)
+		return nil, &UnregisteredSubscriberError{
+			Method:  "Subscribers",
+			Subject: subject,
+		}
 	}
 
 	return ids, nil

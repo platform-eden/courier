@@ -2,12 +2,62 @@ package courier
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
 )
+
+func TestClientNodeSendError_Error(t *testing.T) {
+	err := fmt.Errorf("test error")
+	method := "testMethod"
+	e := &ClientNodeSendError{
+		Method: method,
+		Err:    err,
+	}
+
+	message := e.Error()
+
+	if message != fmt.Sprintf("%s: %s", method, err) {
+		t.Fatalf("expected error message to be %s but got %s", fmt.Sprintf("%s: %s", method, err), message)
+	}
+}
+
+func TestClientNodeDialError_Error(t *testing.T) {
+	hostname := "host"
+	port := "8080"
+	err := fmt.Errorf("test error")
+	method := "testMethod"
+	e := &ClientNodeDialError{
+		Method:   method,
+		Hostname: hostname,
+		Port:     port,
+		Err:      err,
+	}
+
+	message := e.Error()
+
+	if message != fmt.Sprintf("%s: could not create connection at %s:%s: %s", method, hostname, port, err) {
+		t.Fatalf("expected error message to be %s but got %s", fmt.Sprintf("%s: could not create connection at %s:%s: %s", method, hostname, port, err), message)
+	}
+}
+
+func TestClientNodeMessageTypeError_Error(t *testing.T) {
+	mType := PubMessage
+	method := "testMethod"
+	e := &ClientNodeMessageTypeError{
+		Method: method,
+		Type:   mType,
+	}
+
+	message := e.Error()
+
+	if message != fmt.Sprintf("%s: message must be of type %s", method, mType) {
+		t.Fatalf("expected error message to be %s but got %s", fmt.Sprintf("%s: message must be of type %s", method, mType), message)
+	}
+}
 
 /**************************************************************
 Expected Outcomes:

@@ -2,6 +2,7 @@ package courier
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -9,6 +10,21 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 )
+
+func TestNodeIdGenerationError_Error(t *testing.T) {
+	method := "testMethod"
+	err := fmt.Errorf("test error")
+	e := &NodeIdGenerationError{
+		Method: method,
+		Err:    err,
+	}
+
+	message := e.Error()
+
+	if message != fmt.Sprintf("%s: %s", method, err) {
+		t.Fatalf("expected error message to be %s but got %s", fmt.Sprintf("%s: %s", method, err), message)
+	}
+}
 
 /**************************************************************
 Expected Outcomes:
@@ -29,6 +45,10 @@ func TestListenForResponseInfo(t *testing.T) {
 		responses := []ResponseInfo{}
 		rchan := make(chan ResponseInfo)
 		respMap := newResponseMap()
+		wg := &sync.WaitGroup{}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer wg.Add(1)
+		defer cancel()
 
 		for i := 0; i < tc.responseCount; i++ {
 			info := ResponseInfo{
@@ -39,7 +59,7 @@ func TestListenForResponseInfo(t *testing.T) {
 			responses = append(responses, info)
 		}
 
-		go listenForResponseInfo(rchan, respMap)
+		go listenForResponseInfo(ctx, wg, rchan, respMap)
 
 		for _, r := range responses {
 			rchan <- r
@@ -61,6 +81,20 @@ func TestListenForResponseInfo(t *testing.T) {
 			t.Fatal("nodes not added in time")
 		}
 
+		wg.Add(1)
+		waitChannel := make(chan struct{})
+		go func() {
+			cancel()
+			wg.Wait()
+			close(waitChannel)
+		}()
+
+		select {
+		case <-waitChannel:
+			continue
+		case <-time.After(time.Second * 3):
+			t.Fatal("didn't complete wait group in time")
+		}
 	}
 }
 
@@ -93,8 +127,12 @@ func TestListenForNewNodes(t *testing.T) {
 		subjects := []string{"test", "test1", "test2"}
 		nodes := CreateTestNodes(tc.newNodes, &TestNodeOptions{SubscribedSubjects: subjects})
 		nchan := make(chan Node)
+		wg := &sync.WaitGroup{}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer wg.Add(1)
+		defer cancel()
 
-		go listenForNewNodes(nchan, nodeMap, subMap, uuid.NewString(), tc.options...)
+		go listenForNewNodes(ctx, wg, nchan, nodeMap, subMap, uuid.NewString(), tc.options...)
 
 		for _, n := range nodes {
 			nchan <- *n
@@ -134,6 +172,20 @@ func TestListenForNewNodes(t *testing.T) {
 			t.Fatal("nodes not added in time")
 		}
 
+		wg.Add(1)
+		waitChannel := make(chan struct{})
+		go func() {
+			cancel()
+			wg.Wait()
+			close(waitChannel)
+		}()
+
+		select {
+		case <-waitChannel:
+			continue
+		case <-time.After(time.Second * 3):
+			t.Fatal("didn't complete wait group in time")
+		}
 	}
 }
 
@@ -161,6 +213,10 @@ func TestListenForStaleNodes(t *testing.T) {
 		subjects := []string{"test", "test1", "test2"}
 		nodes := CreateTestNodes(tc.staleNodes, &TestNodeOptions{SubscribedSubjects: subjects})
 		schan := make(chan Node)
+		wg := &sync.WaitGroup{}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer wg.Add(1)
+		defer cancel()
 
 		for _, n := range nodes {
 			subMap.Add(n.id, n.subscribedSubjects...)
@@ -169,7 +225,7 @@ func TestListenForStaleNodes(t *testing.T) {
 			})
 		}
 
-		go listenForStaleNodes(schan, nodeMap, subMap)
+		go listenForStaleNodes(ctx, wg, schan, nodeMap, subMap)
 
 		for _, n := range nodes {
 			schan <- *n
@@ -204,6 +260,21 @@ func TestListenForStaleNodes(t *testing.T) {
 		case <-done:
 		case <-time.After(time.Second * 3):
 			t.Fatal("nodes not removed from nodeMap in time")
+		}
+
+		wg.Add(1)
+		waitChannel := make(chan struct{})
+		go func() {
+			cancel()
+			wg.Wait()
+			close(waitChannel)
+		}()
+
+		select {
+		case <-waitChannel:
+			continue
+		case <-time.After(time.Second * 3):
+			t.Fatal("didn't complete wait group in time")
 		}
 	}
 }

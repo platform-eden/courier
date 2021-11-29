@@ -12,9 +12,6 @@ import (
 
 type Sender interface {
 	sendMessage(ctx context.Context, m Message) error
-	sendPublishMessage(ctx context.Context, m Message) error
-	sendRequestMessage(ctx context.Context, m Message) error
-	sendResponseMessage(ctx context.Context, m Message) error
 	Receiver() Node
 }
 
@@ -23,32 +20,59 @@ type attemptMetadata struct {
 	waitInterval time.Duration
 }
 
+type NodeIdGenerationError struct {
+	Method string
+	Err    error
+}
+
+func (err *NodeIdGenerationError) Error() string {
+	return fmt.Sprintf("%s: %s", err.Method, err.Err)
+}
+
 // listenForResponseInfo takes ResponseInfo through a channel and pushes them into a responseMap
-func listenForResponseInfo(responses chan ResponseInfo, respMap ResponseMapper) {
-	for response := range responses {
-		respMap.Push(response)
+func listenForResponseInfo(ctx context.Context, wg *sync.WaitGroup, responseChannel chan ResponseInfo, respMap ResponseMapper) {
+	defer wg.Done()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case response := <-responseChannel:
+			respMap.Push(response)
+		}
 	}
 }
 
 // listenForNewNodes takes nodes passed through a channel and adds them to a NodeMapper and SubMapper
-func listenForNewNodes(nodeChannel chan Node, nodeMap ClientNodeMapper, subMap SubMapper, currentId string, options ...grpc.DialOption) {
-	for n := range nodeChannel {
-		cn, err := newClientNode(n, currentId, options...)
-		if err != nil {
-			log.Printf("skipping %s, couldn't create client node: %s", n.id, err)
-			continue
-		}
+func listenForNewNodes(ctx context.Context, wg *sync.WaitGroup, nodeChannel chan Node, nodeMap ClientNodeMapper, subMap SubMapper, currentId string, options ...grpc.DialOption) {
+	defer wg.Done()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case n := <-nodeChannel:
+			cn, err := newClientNode(n, currentId, options...)
+			if err != nil {
+				log.Printf("skipping %s, couldn't create client node: %s", n.id, err)
+				continue
+			}
 
-		nodeMap.Add(*cn)
-		subMap.Add(n.id, n.subscribedSubjects...)
+			nodeMap.Add(*cn)
+			subMap.Add(n.id, n.subscribedSubjects...)
+		}
 	}
 }
 
 // listenForStaleNodes takes nodes passed in and removes them from a NodeMapper and SubMapper
-func listenForStaleNodes(staleChannel chan Node, nodeMap ClientNodeMapper, subMap SubMapper) {
-	for n := range staleChannel {
-		nodeMap.Remove(n.id)
-		subMap.Remove(n.id, n.subscribedSubjects...)
+func listenForStaleNodes(ctx context.Context, wg *sync.WaitGroup, staleChannel chan Node, nodeMap ClientNodeMapper, subMap SubMapper) {
+	defer wg.Done()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case n := <-staleChannel:
+			nodeMap.Remove(n.id)
+			subMap.Remove(n.id, n.subscribedSubjects...)
+		}
 	}
 }
 
@@ -58,7 +82,10 @@ func generateIdsBySubject(subject string, subMap SubMapper) (<-chan string, erro
 
 	ids, err := subMap.Subscribers(subject)
 	if err != nil {
-		return nil, fmt.Errorf("could not get subscribers: %s", err)
+		return nil, &NodeIdGenerationError{
+			Method: "generateIdsBySubject",
+			Err:    err,
+		}
 	}
 
 	go func() {
@@ -77,7 +104,10 @@ func generateIdsByMessage(messageId string, respMap ResponseMapper) (<-chan stri
 
 	id, err := respMap.Pop(messageId)
 	if err != nil {
-		return nil, fmt.Errorf("could not pop message response: %s", err)
+		return nil, &NodeIdGenerationError{
+			Method: "generateIdsByMessage",
+			Err:    err,
+		}
 	}
 
 	out <- id

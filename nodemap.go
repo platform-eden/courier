@@ -1,14 +1,5 @@
 package courier
 
-type NodeMapper interface {
-	Node(string) (Node, bool)
-	Nodes() map[string]Node
-	Update(...Node)
-	Add(Node)
-	Remove(string)
-	Length() int
-}
-
 type NodeMap struct {
 	nodes map[string]Node
 	lock  Locker

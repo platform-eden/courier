@@ -2,6 +2,7 @@ package courier
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -9,6 +10,49 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
 )
+
+func TestNoObserverError_Error(t *testing.T) {
+	method := "testMethod"
+	e := &NoObserverError{
+		Method: method,
+	}
+
+	message := e.Error()
+
+	if message != fmt.Sprintf("%s: observer must be set", method) {
+		t.Fatalf("expected error message to be %s but got %s", fmt.Sprintf("%s: observer must be set", method), message)
+	}
+}
+
+func TestSendCourierMessageError_Error(t *testing.T) {
+	err := fmt.Errorf("test error")
+	method := "testMethod"
+	e := &SendCourierMessageError{
+		Method: method,
+		Err:    err,
+	}
+
+	message := e.Error()
+
+	if message != fmt.Sprintf("%s: %s", method, err) {
+		t.Fatalf("expected error message to be %s but got %s", fmt.Sprintf("%s: %s", method, err), message)
+	}
+}
+
+func TestCourierStartError_Error(t *testing.T) {
+	err := fmt.Errorf("test error")
+	method := "testMethod"
+	e := &CourierStartError{
+		Method: method,
+		Err:    err,
+	}
+
+	message := e.Error()
+
+	if message != fmt.Sprintf("%s: %s", method, err) {
+		t.Fatalf("expected error message to be %s but got %s", fmt.Sprintf("%s: %s", method, err), message)
+	}
+}
 
 /**************************************************************
 Expected Outcomes:
@@ -175,7 +219,45 @@ func TestCourier_Start(t *testing.T) {
 	}
 }
 
-type createMessage func(string, string, []byte) Message
+func Test(t *testing.T) {
+	type test struct {
+		port     string
+		observer Observer
+	}
+
+	tests := []test{
+		{
+			port:     "3000",
+			observer: newMockObserver(make(chan []Noder), false),
+		},
+	}
+
+	for _, tc := range tests {
+		sub := []string{"sub1", "sub2", "sub3"}
+		broad := []string{"broad1", "broad2", "broad3"}
+
+		c, err := NewCourier(
+			WithObserver(newMockObserver(make(chan []Noder), false)),
+			Subscribes(sub...),
+			Broadcasts(broad...),
+			WithHostname("test.com"),
+			WithPort(tc.port),
+			WithDialOptions([]grpc.DialOption{grpc.WithInsecure()}...),
+			WithFailedMessageWaitInterval(time.Second),
+			WithMaxFailedMessageAttempts(5),
+			StartOnCreation(true),
+		)
+		if err != nil {
+			t.Fatalf("expected NewCourier to pass but it failed: %s", err)
+		}
+
+		c.Stop()
+
+		if c.running == true {
+			t.Fatal("expected runnning to be false but it's true")
+		}
+	}
+}
 
 /**************************************************************
 Expected Outcomes:

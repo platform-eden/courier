@@ -1,10 +1,26 @@
 package courier
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
 )
+
+func TestUnregisteredSubscriberError_Error(t *testing.T) {
+	method := "testMethod"
+	subject := "test"
+	e := &UnregisteredSubscriberError{
+		Method:  method,
+		Subject: subject,
+	}
+
+	message := e.Error()
+
+	if message != fmt.Sprintf("%s: no subscribers registered for subject %s", method, subject) {
+		t.Fatalf("expected error message to be %s but got %s", fmt.Sprintf("%s: no subscribers registered for subject %s", method, subject), message)
+	}
+}
 
 /**************************************************************
 Expected Outcomes:

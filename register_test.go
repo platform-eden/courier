@@ -1,6 +1,7 @@
 package courier
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -46,13 +47,21 @@ func TestRegisterNodes(t *testing.T) {
 		nodes = append(nodes, nn...)
 		fn := CreateTestNodes(1, &TestNodeOptions{})[0]
 		ochan := make(chan []Noder)
-		nchan := make(chan Node)
-		schan := make(chan Node)
+		defer close(ochan)
+		nchan := make(chan Node, len(nodes))
+		defer close(nchan)
+		schan := make(chan Node, len(nodes))
+		defer close(schan)
 		fchan := make(chan Node)
-		blacklist := NewNodeMap()
-		current := NewNodeMap()
+		defer close(fchan)
+		blacklist := NewNodeMap(RemovePointers(bln)...)
+		current := NewNodeMap(RemovePointers(cln)...)
+		ctx, cancel := context.WithCancel(context.Background())
+		wg := &sync.WaitGroup{}
+		defer wg.Add(1)
+		defer cancel()
 
-		go registerNodes(ochan, nchan, schan, fchan, blacklist, current)
+		go registerNodes(ctx, wg, ochan, nchan, schan, fchan, blacklist, current)
 
 		current.Add(*fn)
 		fchan <- *fn
@@ -75,26 +84,42 @@ func TestRegisterNodes(t *testing.T) {
 		}
 
 		noders := []Noder{}
-
 		for _, n := range nodes {
 			noders = append(noders, n)
 		}
 
 		ochan <- noders
-		count = 0
-
-	nodeloop:
-		for {
-			select {
-			case <-nchan:
-				count++
-				if count == tc.newNodeCount {
-					break nodeloop
-				}
-			case <-time.After(time.Second * 3):
-				t.Fatal("did not send all nodes in time")
+		doneChannel := make(chan struct{})
+		go func() {
+			for current.Length() != tc.currentCount+tc.newNodeCount {
+				time.Sleep(time.Millisecond * 300)
 			}
+
+			close(doneChannel)
+		}()
+
+		select {
+		case <-doneChannel:
+			continue
+		case <-time.After(time.Second * 3):
+			t.Fatal("didn't set current in time")
 		}
+
+		wg.Add(1)
+		waitChannel := make(chan struct{})
+		go func() {
+			cancel()
+			wg.Wait()
+			close(waitChannel)
+		}()
+
+		select {
+		case <-waitChannel:
+			continue
+		case <-time.After(time.Second * 3):
+			t.Fatal("didn't complete wait group in time")
+		}
+
 	}
 }
 

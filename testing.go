@@ -2,7 +2,6 @@ package courier
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -18,6 +17,12 @@ import (
 type TestNodeOptions struct {
 	SubscribedSubjects  []string
 	BroadcastedSubjects []string
+}
+
+type ExpectedFailureError struct{}
+
+func (err *ExpectedFailureError) Error() string {
+	return "failed, but this was expected"
 }
 
 // CreateTestNodes creates a quantity of randomized nodes based on the options passed in
@@ -114,7 +119,7 @@ func (m *MockServer) PublishMessage(ctx context.Context, request *proto.PublishM
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	if m.shouldFail {
-		return nil, fmt.Errorf("fail")
+		return nil, &ExpectedFailureError{}
 	}
 
 	pub := NewPubMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
@@ -130,7 +135,7 @@ func (m *MockServer) RequestMessage(ctx context.Context, request *proto.RequestM
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	if m.shouldFail {
-		return nil, fmt.Errorf("fail")
+		return nil, &ExpectedFailureError{}
 	}
 
 	req := NewReqMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
@@ -151,7 +156,7 @@ func (m *MockServer) ResponseMessage(ctx context.Context, request *proto.Respons
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	if m.shouldFail {
-		return nil, fmt.Errorf("fail")
+		return nil, &ExpectedFailureError{}
 	}
 
 	resp := NewRespMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
@@ -205,7 +210,7 @@ func newMockObserver(ochan chan []Noder, fail bool) *MockObserver {
 
 func (o *MockObserver) Observe() (chan []Noder, error) {
 	if o.fail {
-		return nil, errors.New("fail")
+		return nil, &ExpectedFailureError{}
 	}
 
 	return o.observeChannel, nil
@@ -213,7 +218,7 @@ func (o *MockObserver) Observe() (chan []Noder, error) {
 
 func (o *MockObserver) AddNode(*Node) error {
 	if o.fail {
-		return errors.New("fail")
+		return &ExpectedFailureError{}
 	}
 
 	return nil
@@ -221,7 +226,7 @@ func (o *MockObserver) AddNode(*Node) error {
 
 func (o *MockObserver) RemoveNode(*Node) error {
 	if o.fail {
-		return errors.New("fail")
+		return &ExpectedFailureError{}
 	}
 
 	return nil
@@ -261,7 +266,10 @@ func (c *MockClientNode) sendMessage(ctx context.Context, m Message) error {
 	}
 
 	if err != nil {
-		return fmt.Errorf("error semding message: %s", err)
+		return &ClientNodeMessageTypeError{
+			Type:   ReqMessage,
+			Method: "sendRequestMessage",
+		}
 	}
 
 	return nil
@@ -272,11 +280,14 @@ func (c *MockClientNode) sendPublishMessage(ctx context.Context, m Message) erro
 	defer c.Lock.Unlock()
 
 	if c.Fail {
-		return fmt.Errorf("fail")
+		return &ExpectedFailureError{}
 	}
 
 	if m.Type != PubMessage {
-		return fmt.Errorf("message type must be of type PublishMessage")
+		return &ClientNodeMessageTypeError{
+			Type:   ReqMessage,
+			Method: "sendPublishMessage",
+		}
 	}
 
 	c.PublishCount++
@@ -289,11 +300,14 @@ func (c *MockClientNode) sendRequestMessage(ctx context.Context, m Message) erro
 	defer c.Lock.Unlock()
 
 	if c.Fail {
-		return fmt.Errorf("fail")
+		return &ExpectedFailureError{}
 	}
 
 	if m.Type != ReqMessage {
-		return fmt.Errorf("message type must be of type RequestMessage")
+		return &ClientNodeMessageTypeError{
+			Type:   ReqMessage,
+			Method: "sendRequestMessage",
+		}
 	}
 
 	c.RequestCount++
@@ -305,11 +319,14 @@ func (c *MockClientNode) sendResponseMessage(ctx context.Context, m Message) err
 	defer c.Lock.Unlock()
 
 	if c.Fail {
-		return fmt.Errorf("fail")
+		return &ExpectedFailureError{}
 	}
 
 	if m.Type != RespMessage {
-		return fmt.Errorf("message type must be of type ResponseMessage")
+		return &ClientNodeMessageTypeError{
+			Type:   ReqMessage,
+			Method: "sendResponseMessage",
+		}
 	}
 
 	c.ResponseCount++
