@@ -91,7 +91,6 @@ func TestRegisterNodes(t *testing.T) {
 
 		select {
 		case <-doneChannel:
-			continue
 		case <-time.After(time.Second * 3):
 			t.Fatal("didn't set current in time")
 		}
