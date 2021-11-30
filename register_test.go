@@ -33,9 +33,9 @@ func TestRegisterNodes(t *testing.T) {
 			newNodeCount:   25,
 		},
 		{
-			blackListCount: 1000,
-			currentCount:   1000,
-			newNodeCount:   2500,
+			blackListCount: 100,
+			currentCount:   100,
+			newNodeCount:   250,
 		},
 	}
 
@@ -47,13 +47,9 @@ func TestRegisterNodes(t *testing.T) {
 		nodes = append(nodes, nn...)
 		fn := CreateTestNodes(1, &TestNodeOptions{})[0]
 		ochan := make(chan []Noder)
-		defer close(ochan)
 		nchan := make(chan Node, len(nodes))
-		defer close(nchan)
 		schan := make(chan Node, len(nodes))
-		defer close(schan)
 		fchan := make(chan Node)
-		defer close(fchan)
 		blacklist := NewNodeMap(RemovePointers(bln)...)
 		current := NewNodeMap(RemovePointers(cln)...)
 		ctx, cancel := context.WithCancel(context.Background())
@@ -120,6 +116,10 @@ func TestRegisterNodes(t *testing.T) {
 			t.Fatal("didn't complete wait group in time")
 		}
 
+		close(ochan)
+		close(fchan)
+		close(nchan)
+		close(schan)
 	}
 }
 
@@ -139,12 +139,6 @@ func TestUpdateNodes(t *testing.T) {
 	}
 
 	tests := []test{
-		{
-			blackListCount: 10000,
-			currentCount:   10000,
-			newNodeCount:   250000,
-			staleNodeCount: 1000,
-		},
 		{
 			blackListCount: 0,
 			currentCount:   0,
@@ -238,7 +232,7 @@ func TestGenerateNoders(t *testing.T) {
 			count: 10,
 		},
 		{
-			count: 10000,
+			count: 100,
 		},
 		{
 			count: 0,
@@ -293,8 +287,8 @@ func TestCompareBlackList(t *testing.T) {
 			newNodeCount:   0,
 		},
 		{
-			blackListCount: 100,
-			newNodeCount:   1000,
+			blackListCount: 10,
+			newNodeCount:   100,
 		},
 	}
 
@@ -376,9 +370,9 @@ func TestCompareCurrentList(t *testing.T) {
 			currentNodeCount: 10,
 		},
 		{
-			newNodeCount:     1000,
-			staleNodeCount:   500,
-			currentNodeCount: 10000,
+			newNodeCount:     100,
+			staleNodeCount:   50,
+			currentNodeCount: 10,
 		},
 	}
 
@@ -509,7 +503,7 @@ func TestNodeBuffer(t *testing.T) {
 			size: 10,
 		},
 		{
-			size: 1000,
+			size: 100,
 		},
 	}
 
