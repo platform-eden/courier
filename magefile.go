@@ -55,7 +55,7 @@ func Proto() error {
 }
 
 // runs race tests
-func Test() error {
+func Race() error {
 	os.Chdir(baseDir)
 
 	err := sh.Run("go", "test", "-covermode=atomic", "-coverprofile=coverage.out", "./...")
