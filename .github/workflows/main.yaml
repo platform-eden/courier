@@ -16,8 +16,10 @@ jobs:
 
       - name: Run Mage
         uses: magefile/mage-action@v1
+        env:
+          ENV: CI
         with:
-          args: -v race
+          args: -v test
       - name: Push Code Coverage
         uses: codecov/codecov-action@v1
         with:
