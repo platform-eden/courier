@@ -32,11 +32,6 @@ func TestRegisterNodes(t *testing.T) {
 			currentCount:   10,
 			newNodeCount:   25,
 		},
-		{
-			blackListCount: 100,
-			currentCount:   100,
-			newNodeCount:   250,
-		},
 	}
 
 	for _, tc := range tests {
