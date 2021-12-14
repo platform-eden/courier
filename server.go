@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"sync"
 
 	"github.com/platform-edn/courier/proto"
@@ -12,6 +13,7 @@ import (
 )
 
 type MessageServer struct {
+	port            string
 	responseChannel chan ResponseInfo
 	channelMap      channelMapper
 	proto.UnimplementedMessageServerServer
@@ -35,13 +37,37 @@ func (err *MessageServerStartError) Error() string {
 	return fmt.Sprintf("%s: %s", err.Method, err.Err)
 }
 
-func NewMessageServer(rchan chan ResponseInfo, chanMap channelMapper) *MessageServer {
+func NewMessageServer(port string, rchan chan ResponseInfo, chanMap channelMapper) *MessageServer {
 	m := MessageServer{
+		port:            port,
 		responseChannel: rchan,
 		channelMap:      chanMap,
 	}
 
 	return &m
+}
+
+func (m *MessageServer) Start(ctx context.Context, wg *sync.WaitGroup) error {
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", m.port))
+	if err != nil {
+		return &MessageServerStartError{
+			Method: "Start",
+			Err:    err,
+		}
+	}
+
+	server := grpc.NewServer()
+	proto.RegisterMessageServerServer(server, m)
+
+	go startCourierServer(ctx, wg, server, lis, m.port)
+	if err != nil {
+		return &MessageServerStartError{
+			Method: "Start",
+			Err:    err,
+		}
+	}
+
+	return nil
 }
 
 func (m *MessageServer) PublishMessage(ctx context.Context, request *proto.PublishMessageRequest) (*proto.PublishMessageResponse, error) {
@@ -154,21 +180,26 @@ func localIp() string {
 }
 
 // startMessageServer starts the message server on a given port
-func startMessageServer(grpcServer *grpc.Server, port string) error {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
-	if err != nil {
-		return &MessageServerStartError{
-			Method: "startMessageServer",
-			Err:    err,
-		}
-	}
+func startCourierServer(ctx context.Context, wg *sync.WaitGroup, server *grpc.Server, lis net.Listener, port string) {
+	errchan := make(chan error, 1)
+	done := make(chan struct{})
+	defer close(errchan)
+	defer wg.Done()
 
 	go func() {
-		err = grpcServer.Serve(lis)
+		err := server.Serve(lis)
 		if err != nil {
-			log.Printf("stopped serving grpc: %s", err)
+			errchan <- err
 		}
+		defer close(done)
 	}()
 
-	return nil
+	select {
+	case <-ctx.Done():
+		server.GracefulStop()
+		<-done
+	case err := <-errchan:
+		log.Print(err.Error())
+		os.Exit(1)
+	}
 }
