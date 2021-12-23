@@ -32,11 +32,6 @@ func TestRegisterNodes(t *testing.T) {
 			currentCount:   10,
 			newNodeCount:   25,
 		},
-		{
-			blackListCount: 100,
-			currentCount:   100,
-			newNodeCount:   250,
-		},
 	}
 
 	for _, tc := range tests {
@@ -47,13 +42,9 @@ func TestRegisterNodes(t *testing.T) {
 		nodes = append(nodes, nn...)
 		fn := CreateTestNodes(1, &TestNodeOptions{})[0]
 		ochan := make(chan []Noder)
-		defer close(ochan)
 		nchan := make(chan Node, len(nodes))
-		defer close(nchan)
 		schan := make(chan Node, len(nodes))
-		defer close(schan)
 		fchan := make(chan Node)
-		defer close(fchan)
 		blacklist := NewNodeMap(RemovePointers(bln)...)
 		current := NewNodeMap(RemovePointers(cln)...)
 		ctx, cancel := context.WithCancel(context.Background())
@@ -100,7 +91,6 @@ func TestRegisterNodes(t *testing.T) {
 
 		select {
 		case <-doneChannel:
-			continue
 		case <-time.After(time.Second * 3):
 			t.Fatal("didn't set current in time")
 		}
@@ -120,6 +110,10 @@ func TestRegisterNodes(t *testing.T) {
 			t.Fatal("didn't complete wait group in time")
 		}
 
+		close(ochan)
+		close(fchan)
+		close(nchan)
+		close(schan)
 	}
 }
 
@@ -232,7 +226,7 @@ func TestGenerateNoders(t *testing.T) {
 			count: 10,
 		},
 		{
-			count: 10000,
+			count: 100,
 		},
 		{
 			count: 0,
@@ -287,8 +281,8 @@ func TestCompareBlackList(t *testing.T) {
 			newNodeCount:   0,
 		},
 		{
-			blackListCount: 100,
-			newNodeCount:   1000,
+			blackListCount: 10,
+			newNodeCount:   100,
 		},
 	}
 
@@ -372,7 +366,7 @@ func TestCompareCurrentList(t *testing.T) {
 		{
 			newNodeCount:     100,
 			staleNodeCount:   50,
-			currentNodeCount: 1000,
+			currentNodeCount: 10,
 		},
 	}
 

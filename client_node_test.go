@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/test/bufconn"
 )
 
 func TestClientNodeSendError_Error(t *testing.T) {
@@ -105,6 +104,8 @@ Expected Outcomes:
 - returns error if message is not a publish message
 **************************************************************/
 func TestClientNode_SendPublishMessage(t *testing.T) {
+	defer testMessageServer.SetToPass()
+
 	type test struct {
 		m               Message
 		serverFailure   bool
@@ -130,8 +131,13 @@ func TestClientNode_SendPublishMessage(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		server := NewMockServer(bufconn.Listen(1024*1024), tc.serverFailure)
-		_, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
+		if tc.expectedFailure {
+			testMessageServer.SetToFail()
+		} else {
+			testMessageServer.SetToPass()
+		}
+
+		_, conn, err := NewMockClient("bufnet", testMessageServer.BufDialer)
 		if err != nil {
 			if tc.expectedFailure {
 				continue
@@ -167,6 +173,8 @@ Expected Outcomes:
 - returns error if message is not a publish message
 **************************************************************/
 func TestClientNode_SendRequestMessage(t *testing.T) {
+	defer testMessageServer.SetToPass()
+
 	type test struct {
 		m               Message
 		serverFailure   bool
@@ -192,8 +200,13 @@ func TestClientNode_SendRequestMessage(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		server := NewMockServer(bufconn.Listen(1024*1024), tc.serverFailure)
-		_, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
+		if tc.expectedFailure {
+			testMessageServer.SetToFail()
+		} else {
+			testMessageServer.SetToPass()
+		}
+
+		_, conn, err := NewMockClient("bufnet", testMessageServer.BufDialer)
 		if err != nil {
 			if tc.expectedFailure {
 				continue
@@ -229,6 +242,8 @@ Expected Outcomes:
 - returns error if message is not a publish message
 **************************************************************/
 func TestClientNode_SendResponseMessage(t *testing.T) {
+	defer testMessageServer.SetToPass()
+
 	type test struct {
 		m               Message
 		serverFailure   bool
@@ -254,8 +269,13 @@ func TestClientNode_SendResponseMessage(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		server := NewMockServer(bufconn.Listen(1024*1024), tc.serverFailure)
-		_, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
+		if tc.expectedFailure {
+			testMessageServer.SetToFail()
+		} else {
+			testMessageServer.SetToPass()
+		}
+
+		_, conn, err := NewMockClient("bufnet", testMessageServer.BufDialer)
 		if err != nil {
 			if tc.expectedFailure {
 				continue

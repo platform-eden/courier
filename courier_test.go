@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/test/bufconn"
 )
 
 func TestNoObserverError_Error(t *testing.T) {
@@ -127,6 +126,7 @@ func TestNewCourier(t *testing.T) {
 			WithDialOptions(tc.dialOptions...),
 			WithFailedMessageWaitInterval(time.Second),
 			WithMaxFailedMessageAttempts(5),
+			withCourierServer(testMessageServer),
 			StartOnCreation(tc.startOnCreation),
 		)
 		if err != nil {
@@ -219,7 +219,7 @@ func TestCourier_Start(t *testing.T) {
 	}
 }
 
-func Test(t *testing.T) {
+func TestCourier_Stop(t *testing.T) {
 	type test struct {
 		port     string
 		observer Observer
@@ -245,6 +245,7 @@ func Test(t *testing.T) {
 			WithDialOptions([]grpc.DialOption{grpc.WithInsecure()}...),
 			WithFailedMessageWaitInterval(time.Second),
 			WithMaxFailedMessageAttempts(5),
+			withCourierServer(testMessageServer),
 			StartOnCreation(true),
 		)
 		if err != nil {
@@ -267,7 +268,6 @@ Expected Outcomes:
 func TestCourier_Publish(t *testing.T) {
 	type test struct {
 		nodeCount       int
-		port            string
 		nodeSubject     string
 		messageSubject  string
 		expectedFailure bool
@@ -276,21 +276,12 @@ func TestCourier_Publish(t *testing.T) {
 	tests := []test{
 		{
 			nodeCount:       5,
-			port:            "3001",
 			nodeSubject:     "test",
 			messageSubject:  "test",
 			expectedFailure: false,
 		},
 		{
 			nodeCount:       1,
-			port:            "3001",
-			nodeSubject:     "test",
-			messageSubject:  "fail",
-			expectedFailure: true,
-		},
-		{
-			nodeCount:       1,
-			port:            "3001",
 			nodeSubject:     "test",
 			messageSubject:  "fail",
 			expectedFailure: true,
@@ -298,16 +289,22 @@ func TestCourier_Publish(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		server := NewMockServer(bufconn.Listen(1024*1024), false)
+		if tc.expectedFailure {
+			testMessageServer.SetToFail()
+		} else {
+			testMessageServer.SetToPass()
+		}
+		testMessageServer.Clear()
+
 		nodes := CreateTestNodes(tc.nodeCount, &TestNodeOptions{})
 		c, err := NewCourier(
 			WithObserver(newMockObserver(make(chan []Noder), false)),
 			WithHostname("test.com"),
-			WithPort(tc.port),
 			WithDialOptions(grpc.WithInsecure()),
 			WithFailedMessageWaitInterval(time.Second),
 			WithMaxFailedMessageAttempts(5),
-			StartOnCreation(false),
+			withCourierServer(testMessageServer),
+			StartOnCreation(true),
 		)
 		if err != nil {
 			t.Fatalf("could not create new Courier: %s", err)
@@ -315,7 +312,7 @@ func TestCourier_Publish(t *testing.T) {
 
 		for _, n := range nodes {
 			c.clientSubscribers.Add(n.id, tc.nodeSubject)
-			_, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
+			_, conn, err := NewMockClient("bufnet", testMessageServer.BufDialer)
 			if err != nil {
 				t.Fatalf("could not create grpc client: %s", err)
 			}
@@ -329,32 +326,40 @@ func TestCourier_Publish(t *testing.T) {
 			c.clientNodes.Add(cn)
 		}
 
-		done := make(chan bool)
+		done := make(chan struct{})
 		errchan := make(chan error)
 		go func() {
-			err := c.Publish(context.Background(), tc.nodeSubject, []byte("test"))
+			err := c.Publish(context.Background(), tc.messageSubject, []byte("test"))
 			if err != nil {
 				errchan <- err
-				return
 			}
 
-			done <- true
+			close(done)
 		}()
 
-		select {
-		case <-done:
-		case err := <-errchan:
-			if !tc.expectedFailure {
-				t.Fatalf("could not publish message: %s", err)
+	doneloop:
+		for {
+			select {
+			case <-done:
+				if !tc.expectedFailure {
+					if testMessageServer.MessagesLength() != tc.nodeCount {
+						t.Fatalf("expected %v messages to be sent but got %v instead", tc.nodeCount, testMessageServer.MessagesLength())
+					}
+				}
+				break doneloop
+			case err := <-errchan:
+				if !tc.expectedFailure {
+					c.Stop()
+					close(errchan)
+					t.Fatalf("could not request message: %s", err)
+				}
+				continue
+			case <-time.After(time.Second * 3):
+				t.Fatalf("did not send Publish in time")
 			}
-			continue
-		case <-time.After(time.Second * 3):
-			t.Fatalf("did not Publish in time")
 		}
-
-		if server.MessagesLength() != tc.nodeCount {
-			t.Fatalf("expected %v messages to be sent but got %v instead", tc.nodeCount, server.MessagesLength())
-		}
+		c.Stop()
+		close(errchan)
 	}
 }
 
@@ -364,9 +369,10 @@ Expected Outcomes:
 - should send messages to all clients subscribed to the subject
 **************************************************************/
 func TestCourier_Request(t *testing.T) {
+	defer testMessageServer.SetToPass()
+
 	type test struct {
 		nodeCount       int
-		port            string
 		nodeSubject     string
 		messageSubject  string
 		expectedFailure bool
@@ -375,28 +381,24 @@ func TestCourier_Request(t *testing.T) {
 	tests := []test{
 		{
 			nodeCount:       5,
-			port:            "3001",
 			nodeSubject:     "test",
 			messageSubject:  "test",
 			expectedFailure: false,
 		},
 		{
 			nodeCount:       1,
-			port:            "3001",
 			nodeSubject:     "test",
 			messageSubject:  "fail",
 			expectedFailure: true,
 		},
 		{
 			nodeCount:       1,
-			port:            "3001",
 			nodeSubject:     "test",
 			messageSubject:  "fail",
 			expectedFailure: true,
 		},
 		{
 			nodeCount:       1,
-			port:            "3001",
 			nodeSubject:     "test",
 			messageSubject:  "fail",
 			expectedFailure: true,
@@ -404,16 +406,22 @@ func TestCourier_Request(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		server := NewMockServer(bufconn.Listen(1024*1024), false)
+		if tc.expectedFailure {
+			testMessageServer.SetToFail()
+		} else {
+			testMessageServer.SetToPass()
+		}
+		testMessageServer.Clear()
+
 		nodes := CreateTestNodes(tc.nodeCount, &TestNodeOptions{})
 		c, err := NewCourier(
 			WithObserver(newMockObserver(make(chan []Noder), false)),
 			WithHostname("test.com"),
-			WithPort(tc.port),
 			WithDialOptions(grpc.WithInsecure()),
 			WithFailedMessageWaitInterval(time.Second),
 			WithMaxFailedMessageAttempts(5),
-			StartOnCreation(false),
+			withCourierServer(testMessageServer),
+			StartOnCreation(true),
 		)
 		if err != nil {
 			t.Fatalf("could not create new Courier: %s", err)
@@ -421,7 +429,7 @@ func TestCourier_Request(t *testing.T) {
 
 		for _, n := range nodes {
 			c.clientSubscribers.Add(n.id, tc.nodeSubject)
-			_, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
+			_, conn, err := NewMockClient("bufnet", testMessageServer.BufDialer)
 			if err != nil {
 				t.Fatalf("could not create grpc client: %s", err)
 			}
@@ -435,36 +443,44 @@ func TestCourier_Request(t *testing.T) {
 			c.clientNodes.Add(cn)
 		}
 
-		done := make(chan bool)
+		done := make(chan struct{})
 		errchan := make(chan error)
 		go func() {
 			err := c.Request(context.Background(), tc.messageSubject, []byte("test"))
 			if err != nil {
 				errchan <- err
-				return
 			}
 
-			done <- true
+			close(done)
 		}()
 
-		select {
-		case <-done:
-		case err := <-errchan:
-			if !tc.expectedFailure {
-				t.Fatalf("could not request message: %s", err)
+	doneloop:
+		for {
+			select {
+			case <-done:
+				if !tc.expectedFailure {
+					if testMessageServer.MessagesLength() != tc.nodeCount {
+						t.Fatalf("expected %v messages to be sent but got %v instead", tc.nodeCount, testMessageServer.MessagesLength())
+					}
+
+					if testMessageServer.ResponsesLength() != tc.nodeCount {
+						t.Fatalf("expected %v responses to be sent but got %v instead", tc.nodeCount, testMessageServer.ResponsesLength())
+					}
+				}
+				break doneloop
+			case err := <-errchan:
+				if !tc.expectedFailure {
+					c.Stop()
+					close(errchan)
+					t.Fatalf("could not request message: %s", err)
+				}
+				continue
+			case <-time.After(time.Second * 3):
+				t.Fatalf("did not send Response in time")
 			}
-			continue
-		case <-time.After(time.Second * 3):
-			t.Fatalf("did not Request in time")
 		}
-
-		if server.MessagesLength() != tc.nodeCount {
-			t.Fatalf("expected %v messages to be sent but got %v instead", tc.nodeCount, server.MessagesLength())
-		}
-
-		if server.ResponsesLength() != tc.nodeCount {
-			t.Fatalf("expected %v responses to be sent but got %v instead", tc.nodeCount, server.ResponsesLength())
-		}
+		c.Stop()
+		close(errchan)
 	}
 }
 
@@ -474,10 +490,11 @@ Expected Outcomes:
 - sends a message to the node in the responseInfo
 **************************************************************/
 func TestCourier_Response(t *testing.T) {
+	defer testMessageServer.SetToPass()
+
 	type test struct {
 		nodeCount       int
-		port            string
-		nodeSubject     string
+		subject         string
 		badMessageId    bool
 		expectedFailure bool
 	}
@@ -485,105 +502,110 @@ func TestCourier_Response(t *testing.T) {
 	tests := []test{
 		{
 			nodeCount:       5,
-			port:            "3001",
-			nodeSubject:     "test",
+			subject:         "test",
 			badMessageId:    false,
 			expectedFailure: false,
 		},
 		{
 			nodeCount:       1,
-			port:            "3001",
-			nodeSubject:     "test",
+			subject:         "test",
 			badMessageId:    true,
-			expectedFailure: true,
-		},
-		{
-			nodeCount:       1,
-			port:            "3001",
-			nodeSubject:     "test",
-			badMessageId:    false,
 			expectedFailure: true,
 		},
 	}
 
 	for _, tc := range tests {
-		server := NewMockServer(bufconn.Listen(1024*1024), false)
+		if tc.expectedFailure {
+			testMessageServer.SetToFail()
+		} else {
+			testMessageServer.SetToPass()
+		}
+		testMessageServer.Clear()
+
 		nodes := CreateTestNodes(tc.nodeCount, &TestNodeOptions{})
+
 		c, err := NewCourier(
 			WithObserver(newMockObserver(make(chan []Noder), false)),
 			WithHostname("test.com"),
-			WithPort(tc.port),
 			WithDialOptions(grpc.WithInsecure()),
-			WithFailedMessageWaitInterval(time.Second),
-			WithMaxFailedMessageAttempts(5),
-			StartOnCreation(false),
+			WithFailedMessageWaitInterval(time.Millisecond*300),
+			withCourierServer(testMessageServer),
+			WithMaxFailedMessageAttempts(1),
+			StartOnCreation(true),
 		)
 		if err != nil {
 			t.Fatalf("could not create new Courier: %s", err)
 		}
 
-		var messageList []Message
+		messageIds := []string{}
+		_, conn, err := NewMockClient("bufnet", testMessageServer.BufDialer)
+		if err != nil {
+			t.Fatalf("could not create mock client: %s", err)
+		}
 
-		for _, n := range nodes {
-			c.clientSubscribers.Add(n.id, tc.nodeSubject)
-			_, conn, err := NewLocalGRPCClient("bufnet", server.BufDialer)
+		for _, node := range nodes {
+			clientNode, err := newClientNode(*node, c.Id, c.DialOptions...)
 			if err != nil {
-				t.Fatalf("could not create grpc client: %s", err)
+				t.Fatalf("could not create client node: %s", err)
 			}
 
-			cn := clientNode{
-				Node:       *n,
-				connection: conn,
-				currentId:  c.Id,
-			}
+			clientNode.connection = conn
+			c.clientNodes.Add(*clientNode)
 
-			c.clientNodes.Add(cn)
-
-			m := NewRespMessage(uuid.NewString(), tc.nodeSubject, []byte("test"))
+			id := uuid.NewString()
+			messageIds = append(messageIds, id)
 
 			if tc.badMessageId {
 				c.responses.Push(ResponseInfo{
+					NodeId:    node.id,
 					MessageId: "badId",
-					NodeId:    n.id,
 				})
 			} else {
 				c.responses.Push(ResponseInfo{
-					MessageId: m.Id,
-					NodeId:    n.id,
+					NodeId:    node.id,
+					MessageId: id,
 				})
 			}
-
-			messageList = append(messageList, m)
 		}
 
-		done := make(chan bool)
 		errchan := make(chan error)
+		done := make(chan struct{})
+
 		go func() {
-			for _, m := range messageList {
-				err := c.Response(context.Background(), m.Id, m.Subject, m.Content)
+			ctx := context.Background()
+			for _, id := range messageIds {
+				err := c.Response(ctx, id, tc.subject, []byte("test"))
 				if err != nil {
 					errchan <- err
-					return
 				}
 			}
 
-			done <- true
+			close(done)
 		}()
 
-		select {
-		case <-done:
-		case err := <-errchan:
-			if !tc.expectedFailure {
-				t.Fatalf("could not send message: %s", err)
+	doneloop:
+		for {
+			select {
+			case <-done:
+				if !tc.expectedFailure {
+					if testMessageServer.MessagesLength() != tc.nodeCount {
+						t.Fatalf("expected messages sent to be %v but got %v", tc.nodeCount, testMessageServer.MessagesLength())
+					}
+				}
+				break doneloop
+			case err := <-errchan:
+				if !tc.expectedFailure {
+					c.Stop()
+					close(errchan)
+					t.Fatalf("expected test to pass but it failed sending response: %s", err)
+				}
+			case <-time.After(time.Second * 10):
+				t.Fatal("did not finish sending responses in time")
 			}
-			continue
-		case <-time.After(time.Second * 3):
-			t.Fatalf("did not Response in time")
 		}
 
-		if server.MessagesLength() != tc.nodeCount {
-			t.Fatalf("expected %v messages to be sent but got %v instead", tc.nodeCount, server.MessagesLength())
-		}
+		c.Stop()
+		close(errchan)
 	}
 }
 
