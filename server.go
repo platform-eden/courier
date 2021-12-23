@@ -60,12 +60,6 @@ func (m *MessageServer) Start(ctx context.Context, wg *sync.WaitGroup) error {
 	proto.RegisterMessageServerServer(server, m)
 
 	go startCourierServer(ctx, wg, server, lis, m.port)
-	if err != nil {
-		return &MessageServerStartError{
-			Method: "Start",
-			Err:    err,
-		}
-	}
 
 	return nil
 }

@@ -18,7 +18,7 @@ var testMessageServer TestMessageServer
 
 type TestMessageServer interface {
 	proto.MessageServerServer
-	Start(context.Context, *sync.WaitGroup)
+	Start(context.Context, *sync.WaitGroup) error
 	BufDialer(context.Context, string) (net.Conn, error)
 	SetToFail()
 	SetToPass()

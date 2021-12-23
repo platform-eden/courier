@@ -18,6 +18,7 @@ type MockServer struct {
 	proto.UnimplementedMessageServerServer
 	lock       Locker
 	shouldFail bool
+	isRunning  bool
 }
 
 func NewMockServer(lis *bufconn.Listener, port string, fail bool) *MockServer {
@@ -28,16 +29,24 @@ func NewMockServer(lis *bufconn.Listener, port string, fail bool) *MockServer {
 		port:       port,
 		lock:       NewTicketLock(),
 		shouldFail: fail,
+		isRunning:  false,
 	}
 
 	return &s
 }
 
-func (m *MockServer) Start(ctx context.Context, wg *sync.WaitGroup) {
+func (m *MockServer) Start(ctx context.Context, wg *sync.WaitGroup) error {
+	if m.isRunning {
+		return nil
+	}
+
 	server := grpc.NewServer()
 	proto.RegisterMessageServerServer(server, m)
 
 	go startCourierServer(ctx, wg, server, m.Lis, m.port)
+
+	m.isRunning = true
+	return nil
 }
 
 func (m *MockServer) SetToFail() {

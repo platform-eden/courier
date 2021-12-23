@@ -133,7 +133,7 @@ func WithMaxFailedMessageAttempts(attempts int) CourierOption {
 }
 
 //WithGRPCServer sets the grpc server to be used for messaging between courier services.  Should only be used for testing
-func WithCourierServer(server CourierServer) CourierOption {
+func withCourierServer(server CourierServer) CourierOption {
 	return func(c *Courier) {
 		c.server = server
 	}
@@ -220,7 +220,12 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 	}
 	if c.server == nil {
 		c.server = NewMessageServer(c.Port, c.responseChannel, c.internalSubChannels)
+		// for canceling the server
+		c.waitGroup.Add(1)
 	}
+
+	// one for each long running goroutine
+	c.waitGroup.Add(4)
 
 	if c.StartOnCreation {
 		err := c.Start()
@@ -238,7 +243,6 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 func (c *Courier) Start() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	c.cancelFunc = cancel
-	c.waitGroup.Add(5)
 
 	go registerNodes(ctx, c.waitGroup, c.observerChannel, c.newNodeChannel, c.staleNodeChannel, c.failedConnectionChannel, c.blacklistNodes, c.currentNodes)
 	go listenForResponseInfo(ctx, c.waitGroup, c.responseChannel, c.responses)

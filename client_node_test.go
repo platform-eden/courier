@@ -104,6 +104,8 @@ Expected Outcomes:
 - returns error if message is not a publish message
 **************************************************************/
 func TestClientNode_SendPublishMessage(t *testing.T) {
+	defer testMessageServer.SetToPass()
+
 	type test struct {
 		m               Message
 		serverFailure   bool
@@ -171,6 +173,8 @@ Expected Outcomes:
 - returns error if message is not a publish message
 **************************************************************/
 func TestClientNode_SendRequestMessage(t *testing.T) {
+	defer testMessageServer.SetToPass()
+
 	type test struct {
 		m               Message
 		serverFailure   bool
@@ -238,6 +242,8 @@ Expected Outcomes:
 - returns error if message is not a publish message
 **************************************************************/
 func TestClientNode_SendResponseMessage(t *testing.T) {
+	defer testMessageServer.SetToPass()
+
 	type test struct {
 		m               Message
 		serverFailure   bool
