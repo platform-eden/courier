@@ -19,7 +19,7 @@ jobs:
         env:
           ENV: CI
         with:
-          args: -v test
+          args: -v race
       - name: Push Code Coverage
         uses: codecov/codecov-action@v1
         with:
