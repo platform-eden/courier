@@ -40,6 +40,18 @@ func (m *MockServer) Start(ctx context.Context, wg *sync.WaitGroup) {
 	go startCourierServer(ctx, wg, server, m.Lis, m.port)
 }
 
+func (m *MockServer) SetToFail() {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.shouldFail = true
+}
+
+func (m *MockServer) SetToPass() {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.shouldFail = false
+}
+
 func (m *MockServer) BufDialer(context.Context, string) (net.Conn, error) {
 	return m.Lis.Dial()
 }

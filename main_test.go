@@ -20,6 +20,8 @@ type TestMessageServer interface {
 	proto.MessageServerServer
 	Start(context.Context, *sync.WaitGroup)
 	BufDialer(context.Context, string) (net.Conn, error)
+	SetToFail()
+	SetToPass()
 	Clear()
 	MessagesLength() int
 	ResponsesLength() int
