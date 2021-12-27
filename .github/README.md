@@ -8,6 +8,7 @@
 - [x] create event based messaging protocol for pub/sub and request/response messages
 - [ ] add kubernetes svc support for service discovery (svc messaging)
 - [ ] multicontianer pod support to be accessible for other languages
+- [ ] add middleware options for production readiness
 - [ ] add custom resource definition support for service discovery (direct pod messaging)
 - [ ] add external storage support for service discovery (database/existing service discovery methods)
 
