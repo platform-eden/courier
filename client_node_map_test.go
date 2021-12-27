@@ -13,7 +13,7 @@ func TestClientNodeMap_Nodes(t *testing.T) {
 	b := newClientNodeMap()
 
 	for _, n := range nodes {
-		cn, err := newClientNode(*n, uuid.NewString(), grpc.WithInsecure())
+		cn, err := newClientNode(*n, uuid.NewString(), []ClientNodeOption{WithDialOptions(grpc.WithInsecure())}...)
 		if err != nil {
 			t.Fatalf("could not create client node: %s", err)
 		}
@@ -34,7 +34,7 @@ func TestClientNodeMap_Add(t *testing.T) {
 	nodes := CreateTestNodes(l, &TestNodeOptions{})
 
 	for _, n := range nodes {
-		cn, err := newClientNode(*n, uuid.NewString(), grpc.WithInsecure())
+		cn, err := newClientNode(*n, uuid.NewString(), []ClientNodeOption{WithDialOptions(grpc.WithInsecure())}...)
 		if err != nil {
 			t.Fatalf("could not create client node: %s", err)
 		}
@@ -54,7 +54,7 @@ func TestClientNodeMap_Remove(t *testing.T) {
 	nodes := CreateTestNodes(l, &TestNodeOptions{})
 
 	for _, n := range nodes {
-		cn, err := newClientNode(*n, uuid.NewString(), grpc.WithInsecure())
+		cn, err := newClientNode(*n, uuid.NewString(), []ClientNodeOption{WithDialOptions(grpc.WithInsecure())}...)
 		if err != nil {
 			t.Fatalf("could not create client node: %s", err)
 		}
@@ -78,7 +78,7 @@ func TestClientNodeMap_Length(t *testing.T) {
 	nodes := CreateTestNodes(l, &TestNodeOptions{})
 
 	for _, n := range nodes {
-		cn, err := newClientNode(*n, uuid.NewString(), grpc.WithInsecure())
+		cn, err := newClientNode(*n, uuid.NewString(), []ClientNodeOption{WithDialOptions(grpc.WithInsecure())}...)
 		if err != nil {
 			t.Fatalf("could not create client node: %s", err)
 		}

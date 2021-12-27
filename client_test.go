@@ -107,17 +107,17 @@ Expected Outcomes:
 func TestListenForNewNodes(t *testing.T) {
 	type test struct {
 		newNodes int
-		options  []grpc.DialOption
+		options  []ClientNodeOption
 	}
 
 	tests := []test{
 		{
 			newNodes: 10,
-			options:  []grpc.DialOption{grpc.WithInsecure()},
+			options:  []ClientNodeOption{WithDialOptions(grpc.WithInsecure())},
 		},
 		{
 			newNodes: 100,
-			options:  []grpc.DialOption{grpc.WithInsecure()},
+			options:  []ClientNodeOption{WithDialOptions(grpc.WithInsecure())},
 		},
 	}
 
@@ -427,7 +427,7 @@ func TestIdToClientNodes(t *testing.T) {
 		in := make(chan string)
 		ids := []string{}
 		for _, n := range nodes {
-			cn, err := newClientNode(*n, uuid.NewString(), grpc.WithInsecure())
+			cn, err := newClientNode(*n, uuid.NewString(), WithDialOptions(grpc.WithInsecure()))
 			if err != nil {
 				t.Fatalf("could not create clientNode: %s", err)
 			}

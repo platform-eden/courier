@@ -67,17 +67,17 @@ Expected Outcomes:
 func TestNewClientNode(t *testing.T) {
 	type test struct {
 		port            string
-		options         []grpc.DialOption
+		options         []ClientNodeOption
 		expectedFailure bool
 	}
 
 	tests := []test{
 		{
-			options:         []grpc.DialOption{grpc.WithInsecure()},
+			options:         []ClientNodeOption{WithDialOptions(grpc.WithInsecure())},
 			expectedFailure: false,
 		},
 		{
-			options:         []grpc.DialOption{},
+			options:         []ClientNodeOption{},
 			expectedFailure: true,
 		},
 	}
