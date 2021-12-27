@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
-	"google.golang.org/grpc"
 )
 
 type channelMapper interface {
@@ -112,32 +110,13 @@ func WithObserver(observer Observer) CourierOption {
 	}
 }
 
-// WithDialOption sets the dial options for gRPC connections in the client
-func WithDialOptions(option ...grpc.DialOption) CourierOption {
+func WithClientNodeOptions(options ...ClientNodeOption) CourierOption {
 	return func(c *Courier) {
-		c.DialOptions = append(c.DialOptions, option...)
+		c.clientNodeOptions = append(c.clientNodeOptions, options...)
 	}
-}
-
-type ClientRetryOptionsInput struct {
-	maxAttempts     uint
-	backOff         time.Duration
-	jitter          float64
-	perRetryTimeout time.Duration
 }
 
 // WithMaxFailedMessageAttempts sets the max amount of attempts to send a message before blacklisting a node
-func WithClientRetryOptions(input ClientRetryOptionsInput) CourierOption {
-	return func(c *Courier) {
-		opts := []grpc_retry.CallOption{
-			grpc_retry.WithPerRetryTimeout(input.perRetryTimeout),
-			grpc_retry.WithBackoff(grpc_retry.BackoffExponentialWithJitter(input.backOff, input.jitter)),
-			grpc_retry.WithMax(input.maxAttempts),
-		}
-
-		c.DialOptions = append(c.DialOptions, grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor(opts...)))
-	}
-}
 
 //WithGRPCServer sets the grpc server to be used for messaging between courier services.  Should only be used for testing
 func withCourierServer(server CourierServer) CourierOption {
@@ -162,7 +141,7 @@ type Courier struct {
 	BroadcastedSubjects     []string
 	Observer                Observer
 	attemptMetadata         attemptMetadata
-	DialOptions             []grpc.DialOption
+	clientNodeOptions       []ClientNodeOption
 	observerChannel         chan []Noder
 	newNodeChannel          chan Node
 	staleNodeChannel        chan Node
@@ -192,7 +171,7 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 			maxAttempts:  3,
 			waitInterval: time.Second,
 		},
-		DialOptions:             []grpc.DialOption{},
+		clientNodeOptions:       []ClientNodeOption{},
 		Observer:                nil,
 		observerChannel:         make(chan []Noder),
 		newNodeChannel:          make(chan Node),
@@ -222,8 +201,8 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 	if c.Hostname == "" {
 		c.Hostname = localIp()
 	}
-	if len(c.DialOptions) == 0 {
-		c.DialOptions = append(c.DialOptions, grpc.WithInsecure())
+	if len(c.clientNodeOptions) == 0 {
+		c.clientNodeOptions = append(c.clientNodeOptions, WithInsecure())
 	}
 	if c.server == nil {
 		c.server = NewMessageServer(c.Port, c.responseChannel, c.internalSubChannels)
@@ -253,7 +232,7 @@ func (c *Courier) Start() error {
 
 	go registerNodes(ctx, c.waitGroup, c.observerChannel, c.newNodeChannel, c.staleNodeChannel, c.failedConnectionChannel, c.blacklistNodes, c.currentNodes)
 	go listenForResponseInfo(ctx, c.waitGroup, c.responseChannel, c.responses)
-	go listenForNewNodes(ctx, c.waitGroup, c.newNodeChannel, c.clientNodes, c.clientSubscribers, c.Id, c.DialOptions...)
+	go listenForNewNodes(ctx, c.waitGroup, c.newNodeChannel, c.clientNodes, c.clientSubscribers, c.Id, c.clientNodeOptions...)
 	go listenForStaleNodes(ctx, c.waitGroup, c.staleNodeChannel, c.clientNodes, c.clientSubscribers)
 
 	err := c.server.Start(ctx, c.waitGroup)

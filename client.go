@@ -6,8 +6,6 @@ import (
 	"log"
 	"sync"
 	"time"
-
-	"google.golang.org/grpc"
 )
 
 type Sender interface {
@@ -43,7 +41,7 @@ func listenForResponseInfo(ctx context.Context, wg *sync.WaitGroup, responseChan
 }
 
 // listenForNewNodes takes nodes passed through a channel and adds them to a NodeMapper and SubMapper
-func listenForNewNodes(ctx context.Context, wg *sync.WaitGroup, nodeChannel chan Node, nodeMap ClientNodeMapper, subMap SubMapper, currentId string, options ...grpc.DialOption) {
+func listenForNewNodes(ctx context.Context, wg *sync.WaitGroup, nodeChannel chan Node, nodeMap ClientNodeMapper, subMap SubMapper, currentId string, options ...ClientNodeOption) {
 	defer wg.Done()
 	for {
 		select {

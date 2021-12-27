@@ -123,13 +123,15 @@ func TestNewCourier(t *testing.T) {
 			Broadcasts(broad...),
 			WithHostname(tc.hostname),
 			WithPort(tc.port),
-			WithDialOptions(tc.dialOptions...),
-			WithClientRetryOptions(ClientRetryOptionsInput{
-				maxAttempts:     5,
-				backOff:         time.Millisecond * 100,
-				jitter:          0.2,
-				perRetryTimeout: time.Second * 3,
-			}),
+			WithClientNodeOptions(
+				WithDialOptions(tc.dialOptions...),
+				WithClientRetryOptions(ClientRetryOptionsInput{
+					maxAttempts:     5,
+					backOff:         time.Millisecond * 100,
+					jitter:          0.2,
+					perRetryTimeout: time.Second * 3,
+				}),
+			),
 			withCourierServer(testMessageServer),
 			StartOnCreation(tc.startOnCreation),
 		)
@@ -146,7 +148,7 @@ func TestNewCourier(t *testing.T) {
 		if c.Observer == nil {
 			t.Fatal("Observer should not be blank but it is")
 		}
-		if len(c.DialOptions) == 0 {
+		if len(c.clientNodeOptions) == 0 {
 			t.Fatal("DialOptions length should not be 0 but it is")
 		}
 
@@ -199,13 +201,15 @@ func TestCourier_Start(t *testing.T) {
 			Broadcasts(broad...),
 			WithHostname("test.com"),
 			WithPort(tc.port),
-			WithDialOptions([]grpc.DialOption{grpc.WithInsecure()}...),
-			WithClientRetryOptions(ClientRetryOptionsInput{
-				maxAttempts:     5,
-				backOff:         time.Millisecond * 100,
-				jitter:          0.2,
-				perRetryTimeout: time.Second * 3,
-			}),
+			WithClientNodeOptions(
+				WithDialOptions(grpc.WithInsecure()),
+				WithClientRetryOptions(ClientRetryOptionsInput{
+					maxAttempts:     5,
+					backOff:         time.Millisecond * 100,
+					jitter:          0.2,
+					perRetryTimeout: time.Second * 3,
+				}),
+			),
 			StartOnCreation(false),
 		)
 		if err != nil {
@@ -250,13 +254,15 @@ func TestCourier_Stop(t *testing.T) {
 			Broadcasts(broad...),
 			WithHostname("test.com"),
 			WithPort(tc.port),
-			WithDialOptions([]grpc.DialOption{grpc.WithInsecure()}...),
-			WithClientRetryOptions(ClientRetryOptionsInput{
-				maxAttempts:     5,
-				backOff:         time.Millisecond * 100,
-				jitter:          0.2,
-				perRetryTimeout: time.Second * 3,
-			}),
+			WithClientNodeOptions(
+				WithDialOptions(grpc.WithInsecure()),
+				WithClientRetryOptions(ClientRetryOptionsInput{
+					maxAttempts:     5,
+					backOff:         time.Millisecond * 100,
+					jitter:          0.2,
+					perRetryTimeout: time.Second * 3,
+				}),
+			),
 			withCourierServer(testMessageServer),
 			StartOnCreation(true),
 		)
@@ -312,13 +318,15 @@ func TestCourier_Publish(t *testing.T) {
 		c, err := NewCourier(
 			WithObserver(newMockObserver(make(chan []Noder), false)),
 			WithHostname("test.com"),
-			WithDialOptions(grpc.WithInsecure()),
-			WithClientRetryOptions(ClientRetryOptionsInput{
-				maxAttempts:     5,
-				backOff:         time.Millisecond * 100,
-				jitter:          0.2,
-				perRetryTimeout: time.Second * 3,
-			}),
+			WithClientNodeOptions(
+				WithInsecure(),
+				WithClientRetryOptions(ClientRetryOptionsInput{
+					maxAttempts:     5,
+					backOff:         time.Millisecond * 100,
+					jitter:          0.2,
+					perRetryTimeout: time.Second * 3,
+				}),
+			),
 			withCourierServer(testMessageServer),
 			StartOnCreation(true),
 		)
@@ -433,13 +441,15 @@ func TestCourier_Request(t *testing.T) {
 		c, err := NewCourier(
 			WithObserver(newMockObserver(make(chan []Noder), false)),
 			WithHostname("test.com"),
-			WithDialOptions(grpc.WithInsecure()),
-			WithClientRetryOptions(ClientRetryOptionsInput{
-				maxAttempts:     5,
-				backOff:         time.Millisecond * 100,
-				jitter:          0.2,
-				perRetryTimeout: time.Second * 3,
-			}),
+			WithClientNodeOptions(
+				WithDialOptions(grpc.WithInsecure()),
+				WithClientRetryOptions(ClientRetryOptionsInput{
+					maxAttempts:     5,
+					backOff:         time.Millisecond * 100,
+					jitter:          0.2,
+					perRetryTimeout: time.Second * 3,
+				}),
+			),
 			withCourierServer(testMessageServer),
 			StartOnCreation(true),
 		)
@@ -547,14 +557,16 @@ func TestCourier_Response(t *testing.T) {
 		c, err := NewCourier(
 			WithObserver(newMockObserver(make(chan []Noder), false)),
 			WithHostname("test.com"),
-			WithDialOptions(grpc.WithInsecure()),
 			withCourierServer(testMessageServer),
-			WithClientRetryOptions(ClientRetryOptionsInput{
-				maxAttempts:     5,
-				backOff:         time.Millisecond * 100,
-				jitter:          0.2,
-				perRetryTimeout: time.Second * 3,
-			}),
+			WithClientNodeOptions(
+				WithDialOptions(grpc.WithInsecure()),
+				WithClientRetryOptions(ClientRetryOptionsInput{
+					maxAttempts:     5,
+					backOff:         time.Millisecond * 100,
+					jitter:          0.2,
+					perRetryTimeout: time.Second * 3,
+				}),
+			),
 			StartOnCreation(true),
 		)
 		if err != nil {
@@ -568,7 +580,7 @@ func TestCourier_Response(t *testing.T) {
 		}
 
 		for _, node := range nodes {
-			clientNode, err := newClientNode(*node, c.Id, c.DialOptions...)
+			clientNode, err := newClientNode(*node, c.Id, c.clientNodeOptions...)
 			if err != nil {
 				t.Fatalf("could not create client node: %s", err)
 			}
@@ -643,13 +655,15 @@ func TestCourier_Subscribe(t *testing.T) {
 		WithObserver(newMockObserver(make(chan []Noder), false)),
 		WithHostname("test.com"),
 		WithPort("3008"),
-		WithDialOptions(grpc.WithInsecure()),
-		WithClientRetryOptions(ClientRetryOptionsInput{
-			maxAttempts:     5,
-			backOff:         time.Millisecond * 100,
-			jitter:          0.2,
-			perRetryTimeout: time.Second * 3,
-		}),
+		WithClientNodeOptions(
+			WithDialOptions(grpc.WithInsecure()),
+			WithClientRetryOptions(ClientRetryOptionsInput{
+				maxAttempts:     5,
+				backOff:         time.Millisecond * 100,
+				jitter:          0.2,
+				perRetryTimeout: time.Second * 3,
+			}),
+		),
 		StartOnCreation(false),
 	)
 	if err != nil {

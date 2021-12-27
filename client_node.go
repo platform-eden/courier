@@ -3,7 +3,9 @@ package courier
 import (
 	"context"
 	"fmt"
+	"time"
 
+	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	"github.com/platform-edn/courier/proto"
 	"google.golang.org/grpc"
 )
@@ -43,8 +45,65 @@ func (err *ClientNodeMessageTypeError) Error() string {
 	return fmt.Sprintf("%s: message must be of type %s", err.Method, err.Type)
 }
 
-func newClientNode(node Node, currrentId string, options ...grpc.DialOption) (*clientNode, error) {
-	conn, err := grpc.Dial(fmt.Sprintf("%s:%s", node.address, node.port), options...)
+type ClientNodeOptions struct {
+	options []grpc.DialOption
+}
+
+// CourierOption is a set of options that may be passed as parameters when creating a Courier object
+type ClientNodeOption func(c *ClientNodeOptions) *ClientNodeOptions
+
+func NewClientNodeOptions() *ClientNodeOptions {
+	return &ClientNodeOptions{
+		options: []grpc.DialOption{},
+	}
+}
+
+type ClientRetryOptionsInput struct {
+	maxAttempts     uint
+	backOff         time.Duration
+	jitter          float64
+	perRetryTimeout time.Duration
+}
+
+func WithClientRetryOptions(input ClientRetryOptionsInput) ClientNodeOption {
+	return func(c *ClientNodeOptions) *ClientNodeOptions {
+		opts := []grpc_retry.CallOption{
+			grpc_retry.WithPerRetryTimeout(input.perRetryTimeout),
+			grpc_retry.WithBackoff(grpc_retry.BackoffExponentialWithJitter(input.backOff, input.jitter)),
+			grpc_retry.WithMax(input.maxAttempts),
+		}
+
+		c.options = append(c.options, grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor(opts...)))
+
+		return c
+	}
+}
+
+// WithDialOption sets the dial options for gRPC connections in the client
+func WithInsecure() ClientNodeOption {
+	return func(c *ClientNodeOptions) *ClientNodeOptions {
+		c.options = append(c.options, grpc.WithInsecure())
+
+		return c
+	}
+}
+
+// WithDialOption sets the dial options for gRPC connections in the client
+func WithDialOptions(option ...grpc.DialOption) ClientNodeOption {
+	return func(c *ClientNodeOptions) *ClientNodeOptions {
+		c.options = append(c.options, option...)
+
+		return c
+	}
+}
+
+func newClientNode(node Node, currrentId string, optionFuncs ...ClientNodeOption) (*clientNode, error) {
+	clientOptions := NewClientNodeOptions()
+	for _, addOption := range optionFuncs {
+		clientOptions = addOption(clientOptions)
+	}
+
+	conn, err := grpc.Dial(fmt.Sprintf("%s:%s", node.address, node.port), clientOptions.options...)
 	if err != nil {
 		return nil, &ClientNodeDialError{
 			Method:   "newClientNode",
