@@ -14,10 +14,7 @@ func NewMockClient(target string, bufDialer func(context.Context, string) (net.C
 		grpc.WithContextDialer(bufDialer),
 		grpc.WithInsecure(),
 	}
-
-	for _, option := range options {
-		mockDialOptions = append(mockDialOptions, option)
-	}
+	mockDialOptions = append(mockDialOptions, options...)
 
 	conn, err := grpc.DialContext(context.Background(), target, mockDialOptions...)
 	if err != nil {
