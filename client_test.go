@@ -546,17 +546,13 @@ func TestAttemptMessage(t *testing.T) {
 
 	for _, tc := range tests {
 		wg := &sync.WaitGroup{}
-		metadata := attemptMetadata{
-			maxAttempts:  3,
-			waitInterval: time.Millisecond * 100,
-		}
 		ctx := context.Background()
 		msg := NewPubMessage("test", "test", []byte("test"))
 		nchan := make(chan Node, 1)
 		client := NewMockClientNode(*CreateTestNodes(1, &TestNodeOptions{})[0], tc.expectedFailure)
 		wg.Add(1)
 
-		attemptMessage(ctx, client, metadata, msg, nchan, wg)
+		attemptMessage(ctx, client, msg, nchan, wg)
 
 		wg.Wait()
 

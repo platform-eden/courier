@@ -73,7 +73,7 @@ func TestNewCourier(t *testing.T) {
 	tests := []test{
 		{
 			observer:        newMockObserver(make(chan []Noder), false),
-			dialOptions:     []grpc.DialOption{grpc.WithInsecure()},
+			dialOptions:     []grpc.DialOption{},
 			hostname:        "test",
 			port:            "3000",
 			startOnCreation: true,
@@ -124,8 +124,12 @@ func TestNewCourier(t *testing.T) {
 			WithHostname(tc.hostname),
 			WithPort(tc.port),
 			WithDialOptions(tc.dialOptions...),
-			WithFailedMessageWaitInterval(time.Second),
-			WithMaxFailedMessageAttempts(5),
+			WithClientRetryOptions(ClientRetryOptionsInput{
+				maxAttempts:     5,
+				backOff:         time.Millisecond * 100,
+				jitter:          0.2,
+				perRetryTimeout: time.Second * 3,
+			}),
 			withCourierServer(testMessageServer),
 			StartOnCreation(tc.startOnCreation),
 		)
@@ -196,8 +200,12 @@ func TestCourier_Start(t *testing.T) {
 			WithHostname("test.com"),
 			WithPort(tc.port),
 			WithDialOptions([]grpc.DialOption{grpc.WithInsecure()}...),
-			WithFailedMessageWaitInterval(time.Second),
-			WithMaxFailedMessageAttempts(5),
+			WithClientRetryOptions(ClientRetryOptionsInput{
+				maxAttempts:     5,
+				backOff:         time.Millisecond * 100,
+				jitter:          0.2,
+				perRetryTimeout: time.Second * 3,
+			}),
 			StartOnCreation(false),
 		)
 		if err != nil {
@@ -243,8 +251,12 @@ func TestCourier_Stop(t *testing.T) {
 			WithHostname("test.com"),
 			WithPort(tc.port),
 			WithDialOptions([]grpc.DialOption{grpc.WithInsecure()}...),
-			WithFailedMessageWaitInterval(time.Second),
-			WithMaxFailedMessageAttempts(5),
+			WithClientRetryOptions(ClientRetryOptionsInput{
+				maxAttempts:     5,
+				backOff:         time.Millisecond * 100,
+				jitter:          0.2,
+				perRetryTimeout: time.Second * 3,
+			}),
 			withCourierServer(testMessageServer),
 			StartOnCreation(true),
 		)
@@ -301,8 +313,12 @@ func TestCourier_Publish(t *testing.T) {
 			WithObserver(newMockObserver(make(chan []Noder), false)),
 			WithHostname("test.com"),
 			WithDialOptions(grpc.WithInsecure()),
-			WithFailedMessageWaitInterval(time.Second),
-			WithMaxFailedMessageAttempts(5),
+			WithClientRetryOptions(ClientRetryOptionsInput{
+				maxAttempts:     5,
+				backOff:         time.Millisecond * 100,
+				jitter:          0.2,
+				perRetryTimeout: time.Second * 3,
+			}),
 			withCourierServer(testMessageServer),
 			StartOnCreation(true),
 		)
@@ -418,8 +434,12 @@ func TestCourier_Request(t *testing.T) {
 			WithObserver(newMockObserver(make(chan []Noder), false)),
 			WithHostname("test.com"),
 			WithDialOptions(grpc.WithInsecure()),
-			WithFailedMessageWaitInterval(time.Second),
-			WithMaxFailedMessageAttempts(5),
+			WithClientRetryOptions(ClientRetryOptionsInput{
+				maxAttempts:     5,
+				backOff:         time.Millisecond * 100,
+				jitter:          0.2,
+				perRetryTimeout: time.Second * 3,
+			}),
 			withCourierServer(testMessageServer),
 			StartOnCreation(true),
 		)
@@ -528,9 +548,13 @@ func TestCourier_Response(t *testing.T) {
 			WithObserver(newMockObserver(make(chan []Noder), false)),
 			WithHostname("test.com"),
 			WithDialOptions(grpc.WithInsecure()),
-			WithFailedMessageWaitInterval(time.Millisecond*300),
 			withCourierServer(testMessageServer),
-			WithMaxFailedMessageAttempts(1),
+			WithClientRetryOptions(ClientRetryOptionsInput{
+				maxAttempts:     5,
+				backOff:         time.Millisecond * 100,
+				jitter:          0.2,
+				perRetryTimeout: time.Second * 3,
+			}),
 			StartOnCreation(true),
 		)
 		if err != nil {
@@ -620,8 +644,12 @@ func TestCourier_Subscribe(t *testing.T) {
 		WithHostname("test.com"),
 		WithPort("3008"),
 		WithDialOptions(grpc.WithInsecure()),
-		WithFailedMessageWaitInterval(time.Second),
-		WithMaxFailedMessageAttempts(5),
+		WithClientRetryOptions(ClientRetryOptionsInput{
+			maxAttempts:     5,
+			backOff:         time.Millisecond * 100,
+			jitter:          0.2,
+			perRetryTimeout: time.Second * 3,
+		}),
 		StartOnCreation(false),
 	)
 	if err != nil {

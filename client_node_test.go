@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
+	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	"google.golang.org/grpc"
 )
 
@@ -137,7 +139,13 @@ func TestClientNode_SendPublishMessage(t *testing.T) {
 			testMessageServer.SetToPass()
 		}
 
-		_, conn, err := NewMockClient("bufnet", testMessageServer.BufDialer)
+		opts := []grpc_retry.CallOption{
+			grpc_retry.WithPerRetryTimeout(time.Second),
+			grpc_retry.WithBackoff(grpc_retry.BackoffExponentialWithJitter(time.Millisecond*100, 0.2)),
+			grpc_retry.WithMax(3),
+		}
+
+		_, conn, err := NewMockClient("bufnet", testMessageServer.BufDialer, grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor(opts...)))
 		if err != nil {
 			if tc.expectedFailure {
 				continue

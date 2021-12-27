@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	"google.golang.org/grpc"
 )
 
@@ -111,13 +112,6 @@ func WithObserver(observer Observer) CourierOption {
 	}
 }
 
-// WithFailedMessageWaitInterval sets the time in between attempts to send a message
-func WithFailedMessageWaitInterval(interval time.Duration) CourierOption {
-	return func(c *Courier) {
-		c.attemptMetadata.waitInterval = interval
-	}
-}
-
 // WithDialOption sets the dial options for gRPC connections in the client
 func WithDialOptions(option ...grpc.DialOption) CourierOption {
 	return func(c *Courier) {
@@ -125,10 +119,23 @@ func WithDialOptions(option ...grpc.DialOption) CourierOption {
 	}
 }
 
+type ClientRetryOptionsInput struct {
+	maxAttempts     uint
+	backOff         time.Duration
+	jitter          float64
+	perRetryTimeout time.Duration
+}
+
 // WithMaxFailedMessageAttempts sets the max amount of attempts to send a message before blacklisting a node
-func WithMaxFailedMessageAttempts(attempts int) CourierOption {
+func WithClientRetryOptions(input ClientRetryOptionsInput) CourierOption {
 	return func(c *Courier) {
-		c.attemptMetadata.maxAttempts = attempts
+		opts := []grpc_retry.CallOption{
+			grpc_retry.WithPerRetryTimeout(input.perRetryTimeout),
+			grpc_retry.WithBackoff(grpc_retry.BackoffExponentialWithJitter(input.backOff, input.jitter)),
+			grpc_retry.WithMax(input.maxAttempts),
+		}
+
+		c.DialOptions = append(c.DialOptions, grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor(opts...)))
 	}
 }
 
