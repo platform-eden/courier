@@ -11,7 +11,7 @@ import (
 )
 
 type Sender interface {
-	sendMessage(ctx context.Context, m Message) error
+	sendMessage(context.Context, Message) error
 	Receiver() Node
 }
 
@@ -144,7 +144,7 @@ func fanMessageAttempts(in <-chan Sender, ctx context.Context, metadata attemptM
 
 		for n := range in {
 			wg.Add(1)
-			go attemptMessage(ctx, n, metadata, msg, out, wg)
+			go attemptMessage(ctx, n, msg, out, wg)
 		}
 
 		wg.Wait()
@@ -155,22 +155,12 @@ func fanMessageAttempts(in <-chan Sender, ctx context.Context, metadata attemptM
 }
 
 // attemptMessage takes a send function and attempts it until it succeeds or has reached maxAttempts.  Waits between attempts depends on the given interval
-func attemptMessage(ctx context.Context, sender Sender, metadata attemptMetadata, msg Message, nchan chan Node, wg *sync.WaitGroup) {
+func attemptMessage(ctx context.Context, sender Sender, msg Message, nchan chan Node, wg *sync.WaitGroup) {
 	defer wg.Done()
-
-	attempts := 0
-	for attempts < metadata.maxAttempts {
-		err := sender.sendMessage(ctx, msg)
-		if err != nil {
-			attempts++
-			time.Sleep(metadata.waitInterval)
-			continue
-		}
-
-		return
+	err := sender.sendMessage(ctx, msg)
+	if err != nil {
+		nchan <- sender.Receiver()
 	}
-
-	nchan <- sender.Receiver()
 }
 
 // forwardFailedConnections takes a channel of nodes and sends them through a stale channel as well as a failed connection channel.  Returns a bool channel that receives true when it's done
