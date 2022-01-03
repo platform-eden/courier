@@ -16,7 +16,7 @@ import (
 func TestMessageServerStartError_Error(t *testing.T) {
 	method := "testMethod"
 	err := fmt.Errorf("test error")
-	e := &MessageServerStartError{
+	e := &gRPCServerStartError{
 		Method: method,
 		Err:    err,
 	}
@@ -60,7 +60,7 @@ func TestMessageServer_PublishMessage(t *testing.T) {
 		defer chanMap.Close()
 		mchan := chanMap.Add(tc.chanMapSubject)
 		errchan := make(chan error)
-		ms := NewMessageServer("3000", rchan, chanMap)
+		ms := NewgRPCServer("3000", rchan, chanMap)
 
 		go func() {
 			m := proto.PublishMessageRequest{
@@ -122,7 +122,7 @@ func TestMessageServer_ResponseMessage(t *testing.T) {
 		defer chanMap.Close()
 		mchan := chanMap.Add(tc.chanMapSubject)
 		errchan := make(chan error)
-		ms := NewMessageServer("3000", rchan, chanMap)
+		ms := NewgRPCServer("3000", rchan, chanMap)
 
 		go func() {
 			m := proto.ResponseMessageRequest{
@@ -181,7 +181,7 @@ func TestMessageServer_RequestMessage(t *testing.T) {
 	for _, tc := range tests {
 		rchan := make(chan ResponseInfo, 1)
 		chanMap := newChannelMap()
-		ms := NewMessageServer("3000", rchan, chanMap)
+		ms := NewgRPCServer("3000", rchan, chanMap)
 		mchan := chanMap.Add(tc.chanMapSubject)
 		defer chanMap.Close()
 		errchan := make(chan error)

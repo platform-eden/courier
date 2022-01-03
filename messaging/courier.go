@@ -42,8 +42,15 @@ type ClientNodeMapper interface {
 	Length() int
 }
 
-type CourierServer interface {
-	Start(context.Context, *sync.WaitGroup) error
+type messageServer interface {
+	start(context.Context, *sync.WaitGroup) error
+	subscribe(string) <-chan Message
+}
+
+type messageClienter interface {
+	publish()
+	request()
+	response()
 }
 
 type NoObserverError struct {
@@ -119,7 +126,7 @@ func WithClientNodeOptions(options ...ClientNodeOption) CourierOption {
 // WithMaxFailedMessageAttempts sets the max amount of attempts to send a message before blacklisting a node
 
 //WithGRPCServer sets the grpc server to be used for messaging between courier services.  Should only be used for testing
-func withCourierServer(server CourierServer) CourierOption {
+func withCourierServer(server messageServer) CourierOption {
 	return func(c *Courier) {
 		c.server = server
 	}
@@ -155,7 +162,7 @@ type Courier struct {
 	clientSubscribers       SubMapper
 	responses               ResponseMapper
 	internalSubChannels     channelMapper
-	server                  CourierServer
+	server                  messageServer
 	StartOnCreation         bool
 	running                 bool
 }
@@ -205,7 +212,7 @@ func NewCourier(options ...CourierOption) (*Courier, error) {
 		c.clientNodeOptions = append(c.clientNodeOptions, WithInsecure())
 	}
 	if c.server == nil {
-		c.server = NewMessageServer(c.Port, c.responseChannel, c.internalSubChannels)
+		c.server = NewgRPCServer(c.Port, c.responseChannel, c.internalSubChannels)
 		// for canceling the server
 		c.waitGroup.Add(1)
 	}
@@ -235,7 +242,7 @@ func (c *Courier) Start() error {
 	go listenForNewNodes(ctx, c.waitGroup, c.newNodeChannel, c.clientNodes, c.clientSubscribers, c.Id, c.clientNodeOptions...)
 	go listenForStaleNodes(ctx, c.waitGroup, c.staleNodeChannel, c.clientNodes, c.clientSubscribers)
 
-	err := c.server.Start(ctx, c.waitGroup)
+	err := c.server.start(ctx, c.waitGroup)
 	if err != nil {
 		return &CourierStartError{
 			Method: "Start",
@@ -333,7 +340,7 @@ func (c *Courier) Response(ctx context.Context, id string, subject string, conte
 }
 
 func (c *Courier) Subscribe(subject string) <-chan Message {
-	channel := c.internalSubChannels.Add(subject)
+	channel := c.server.subscribe(subject)
 
 	return channel
 }

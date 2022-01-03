@@ -18,7 +18,7 @@ var testMessageServer TestMessageServer
 
 type TestMessageServer interface {
 	proto.MessageServerServer
-	Start(context.Context, *sync.WaitGroup) error
+	messageServer
 	BufDialer(context.Context, string) (net.Conn, error)
 	SetToFail()
 	SetToPass()
@@ -91,7 +91,7 @@ func TestMain(m *testing.M) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	wg.Add(1)
-	testMessageServer.Start(ctx, &wg)
+	testMessageServer.start(ctx, &wg)
 
 	exitVal := m.Run()
 

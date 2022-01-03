@@ -35,7 +35,7 @@ func NewMockServer(lis *bufconn.Listener, port string, fail bool) *MockServer {
 	return &s
 }
 
-func (m *MockServer) Start(ctx context.Context, wg *sync.WaitGroup) error {
+func (m *MockServer) start(ctx context.Context, wg *sync.WaitGroup) error {
 	if m.isRunning {
 		return nil
 	}
@@ -46,6 +46,10 @@ func (m *MockServer) Start(ctx context.Context, wg *sync.WaitGroup) error {
 	go startCourierServer(ctx, wg, server, m.Lis, m.port)
 
 	m.isRunning = true
+	return nil
+}
+
+func (m *MockServer) subscribe(subject string) <-chan Message {
 	return nil
 }
 

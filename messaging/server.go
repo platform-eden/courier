@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-type MessageServer struct {
+type gRPCServer struct {
 	port            string
 	responseChannel chan ResponseInfo
 	channelMap      channelMapper
@@ -28,17 +28,17 @@ func (err *ChannelSubscriptionError) Error() string {
 	return fmt.Sprintf("%s: %s", err.Method, err.Err)
 }
 
-type MessageServerStartError struct {
+type gRPCServerStartError struct {
 	Method string
 	Err    error
 }
 
-func (err *MessageServerStartError) Error() string {
+func (err *gRPCServerStartError) Error() string {
 	return fmt.Sprintf("%s: %s", err.Method, err.Err)
 }
 
-func NewMessageServer(port string, rchan chan ResponseInfo, chanMap channelMapper) *MessageServer {
-	m := MessageServer{
+func NewgRPCServer(port string, rchan chan ResponseInfo, chanMap channelMapper) *gRPCServer {
+	m := gRPCServer{
 		port:            port,
 		responseChannel: rchan,
 		channelMap:      chanMap,
@@ -47,27 +47,31 @@ func NewMessageServer(port string, rchan chan ResponseInfo, chanMap channelMappe
 	return &m
 }
 
-func (m *MessageServer) Start(ctx context.Context, wg *sync.WaitGroup) error {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", m.port))
+func (s *gRPCServer) start(ctx context.Context, wg *sync.WaitGroup) error {
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", s.port))
 	if err != nil {
-		return &MessageServerStartError{
+		return &gRPCServerStartError{
 			Method: "Start",
 			Err:    err,
 		}
 	}
 
 	server := grpc.NewServer()
-	proto.RegisterMessageServerServer(server, m)
+	proto.RegisterMessageServerServer(server, s)
 
-	go startCourierServer(ctx, wg, server, lis, m.port)
+	go startCourierServer(ctx, wg, server, lis, s.port)
 
 	return nil
 }
 
-func (m *MessageServer) PublishMessage(ctx context.Context, request *proto.PublishMessageRequest) (*proto.PublishMessageResponse, error) {
+func (s *gRPCServer) subscribe(subject string) <-chan Message {
+	return s.channelMap.Add(subject)
+}
+
+func (s *gRPCServer) PublishMessage(ctx context.Context, request *proto.PublishMessageRequest) (*proto.PublishMessageResponse, error) {
 	pub := NewPubMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
 
-	channels, err := m.channelMap.Subscriptions(pub.Subject)
+	channels, err := s.channelMap.Subscriptions(pub.Subject)
 	if err != nil {
 		return nil, &ChannelSubscriptionError{
 			Method: "PublishMessage",
@@ -83,16 +87,16 @@ func (m *MessageServer) PublishMessage(ctx context.Context, request *proto.Publi
 	return &response, nil
 }
 
-func (m *MessageServer) RequestMessage(ctx context.Context, request *proto.RequestMessageRequest) (*proto.RequestMessageResponse, error) {
+func (s *gRPCServer) RequestMessage(ctx context.Context, request *proto.RequestMessageRequest) (*proto.RequestMessageResponse, error) {
 	req := NewReqMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
 	info := ResponseInfo{
 		MessageId: request.Message.Id,
 		NodeId:    request.Message.NodeId,
 	}
 
-	m.responseChannel <- info
+	s.responseChannel <- info
 
-	channels, err := m.channelMap.Subscriptions(req.Subject)
+	channels, err := s.channelMap.Subscriptions(req.Subject)
 	if err != nil {
 		return nil, &ChannelSubscriptionError{
 			Method: "RequestMessage",
@@ -108,10 +112,10 @@ func (m *MessageServer) RequestMessage(ctx context.Context, request *proto.Reque
 	return &response, nil
 }
 
-func (m *MessageServer) ResponseMessage(ctx context.Context, request *proto.ResponseMessageRequest) (*proto.ResponseMessageResponse, error) {
+func (s *gRPCServer) ResponseMessage(ctx context.Context, request *proto.ResponseMessageRequest) (*proto.ResponseMessageResponse, error) {
 	resp := NewRespMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
 
-	channels, err := m.channelMap.Subscriptions(resp.Subject)
+	channels, err := s.channelMap.Subscriptions(resp.Subject)
 	if err != nil {
 		return nil, &ChannelSubscriptionError{
 			Method: "ResponseMessage",
@@ -173,7 +177,7 @@ func localIp() string {
 	return localAddr.IP.String()
 }
 
-// startMessageServer starts the message server on a given port
+// startgRPCServer starts the message server on a given port
 func startCourierServer(ctx context.Context, wg *sync.WaitGroup, server *grpc.Server, lis net.Listener, port string) {
 	errchan := make(chan error, 1)
 	done := make(chan struct{})
