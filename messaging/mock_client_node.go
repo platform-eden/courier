@@ -11,12 +11,6 @@ type MockClientNode struct {
 	Lock          Locker
 }
 
-type ExpectedFailureError struct{}
-
-func (err *ExpectedFailureError) Error() string {
-	return "failed, but this was expected"
-}
-
 func NewMockClientNode(node Node, fail bool) *MockClientNode {
 	c := MockClientNode{
 		Node:          node,

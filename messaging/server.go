@@ -27,24 +27,6 @@ type messagingServer struct {
 	proto.UnimplementedMessageServerServer
 }
 
-type ChannelSubscriptionError struct {
-	Method string
-	Err    error
-}
-
-func (err *ChannelSubscriptionError) Error() string {
-	return fmt.Sprintf("%s: %s", err.Method, err.Err)
-}
-
-type messagingServerStartError struct {
-	Method string
-	Err    error
-}
-
-func (err *messagingServerStartError) Error() string {
-	return fmt.Sprintf("%s: %s", err.Method, err.Err)
-}
-
 type messagingServerOptions struct {
 	port            string
 	responseChannel chan ResponseInfo

@@ -1,22 +1,12 @@
 package messaging
 
 import (
-	"fmt"
 	"sort"
 )
 
 type subscriberMap struct {
 	subjectSubscribers map[string][]string
 	lock               *TicketLock
-}
-
-type UnregisteredSubscriberError struct {
-	Method  string
-	Subject string
-}
-
-func (err *UnregisteredSubscriberError) Error() string {
-	return fmt.Sprintf("%s: no subscribers registered for subject %s", err.Method, err.Subject)
 }
 
 func newSubscriberMap() *subscriberMap {

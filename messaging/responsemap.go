@@ -1,21 +1,8 @@
 package messaging
 
-import (
-	"fmt"
-)
-
 type responseMap struct {
 	responses map[string]string
 	lock      *TicketLock
-}
-
-type UnregisteredResponseError struct {
-	Method    string
-	MessageId string
-}
-
-func (err *UnregisteredResponseError) Error() string {
-	return fmt.Sprintf("%s: no response exists with id %s", err.Method, err.MessageId)
 }
 
 func newResponseMap() *responseMap {

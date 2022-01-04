@@ -2,7 +2,6 @@ package messaging
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"sync"
 )
@@ -54,24 +53,6 @@ type messageClientOptions struct {
 	currentId       string
 	clientOptions   []ClientNodeOption
 	startClient     bool
-}
-
-type MessagingClientError struct {
-	Method string
-	Err    error
-}
-
-func (err *MessagingClientError) Error() string {
-	return fmt.Sprintf("%s: %s", err.Method, err.Err)
-}
-
-type NodeIdGenerationError struct {
-	Method string
-	Err    error
-}
-
-func (err *NodeIdGenerationError) Error() string {
-	return fmt.Sprintf("%s: %s", err.Method, err.Err)
 }
 
 func newMessagingClient(options *messageClientOptions) *messagingClient {

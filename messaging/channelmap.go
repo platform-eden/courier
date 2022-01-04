@@ -1,21 +1,8 @@
 package messaging
 
-import (
-	"fmt"
-)
-
 type ChannelMap struct {
 	SubjectChannels map[string][]chan Message
 	Lock            Locker
-}
-
-type UnregisteredChannelSubjectError struct {
-	Method  string
-	Subject string
-}
-
-func (err *UnregisteredChannelSubjectError) Error() string {
-	return fmt.Sprintf("%s: no channels registered for subject %s", err.Method, err.Subject)
 }
 
 func newChannelMap() *ChannelMap {

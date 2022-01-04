@@ -2,7 +2,6 @@ package messaging
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/google/uuid"
 )
@@ -21,32 +20,6 @@ type messageClientHandler interface {
 
 type nodeRegister interface {
 	stop()
-}
-
-type NoObserverChannelError struct {
-	Method string
-}
-
-func (err *NoObserverChannelError) Error() string {
-	return fmt.Sprintf("%s: observer channel must be set", err.Method)
-}
-
-type SendMessagingServiceMessageError struct {
-	Method string
-	Err    error
-}
-
-func (err *SendMessagingServiceMessageError) Error() string {
-	return fmt.Sprintf("%s: %s", err.Method, err.Err)
-}
-
-type MessagingServiceStartError struct {
-	Method string
-	Err    error
-}
-
-func (err *MessagingServiceStartError) Error() string {
-	return fmt.Sprintf("%s: %s", err.Method, err.Err)
 }
 
 // MessagingServiceOption is a set of options that may be passed as parameters when creating a MessagingService object
