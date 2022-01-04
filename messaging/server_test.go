@@ -16,7 +16,7 @@ import (
 func TestMessageServerStartError_Error(t *testing.T) {
 	method := "testMethod"
 	err := fmt.Errorf("test error")
-	e := &gRPCServerStartError{
+	e := &messagingServerStartError{
 		Method: method,
 		Err:    err,
 	}
@@ -56,11 +56,17 @@ func TestMessageServer_PublishMessage(t *testing.T) {
 	for _, tc := range tests {
 		rchan := make(chan ResponseInfo)
 		defer close(rchan)
-		chanMap := newChannelMap()
-		defer chanMap.Close()
-		mchan := chanMap.Add(tc.chanMapSubject)
 		errchan := make(chan error)
-		ms := NewgRPCServer("3000", rchan, chanMap)
+		ms, err := newMessagingServer(&messagingServerOptions{
+			port:            "3000",
+			responseChannel: rchan,
+			startServer:     false,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		mchan := ms.channelMap.Add(tc.chanMapSubject)
 
 		go func() {
 			m := proto.PublishMessageRequest{
@@ -87,6 +93,8 @@ func TestMessageServer_PublishMessage(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatal("didn't receive message on Message Channel back in time")
 		}
+
+		ms.channelMap.Close()
 	}
 }
 
@@ -118,11 +126,17 @@ func TestMessageServer_ResponseMessage(t *testing.T) {
 	for _, tc := range tests {
 		rchan := make(chan ResponseInfo)
 		defer close(rchan)
-		chanMap := newChannelMap()
-		defer chanMap.Close()
-		mchan := chanMap.Add(tc.chanMapSubject)
 		errchan := make(chan error)
-		ms := NewgRPCServer("3000", rchan, chanMap)
+		ms, err := newMessagingServer(&messagingServerOptions{
+			port:            "3000",
+			responseChannel: rchan,
+			startServer:     false,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		mchan := ms.channelMap.Add(tc.chanMapSubject)
 
 		go func() {
 			m := proto.ResponseMessageRequest{
@@ -149,6 +163,8 @@ func TestMessageServer_ResponseMessage(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatal("didn't receive message on Message Channel back in time")
 		}
+
+		ms.channelMap.Close()
 	}
 }
 
@@ -180,10 +196,16 @@ func TestMessageServer_RequestMessage(t *testing.T) {
 
 	for _, tc := range tests {
 		rchan := make(chan ResponseInfo, 1)
-		chanMap := newChannelMap()
-		ms := NewgRPCServer("3000", rchan, chanMap)
-		mchan := chanMap.Add(tc.chanMapSubject)
-		defer chanMap.Close()
+		ms, err := newMessagingServer(&messagingServerOptions{
+			port:            "3000",
+			responseChannel: rchan,
+			startServer:     false,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		mchan := ms.channelMap.Add(tc.chanMapSubject)
 		errchan := make(chan error)
 
 		go func() {
@@ -221,6 +243,8 @@ func TestMessageServer_RequestMessage(t *testing.T) {
 		if count != 1 {
 			t.Fatalf("expected a ResponseInfo to be sent through but got %v ResponseInfos", count)
 		}
+
+		ms.channelMap.Close()
 	}
 }
 
@@ -338,13 +362,13 @@ var lis = bufconn.Listen(1024 * 1024)
 Expected Outcomes:
 - should start a grpc server
 **************************************************************/
-func TestStartCourierServer(t *testing.T) {
+func TestStartMessagingServer(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	server := grpc.NewServer()
 
-	go startCourierServer(ctx, &wg, server, lis, "3005")
+	go startMessagingServer(ctx, &wg, server, lis, "3005")
 
 	cancel()
 

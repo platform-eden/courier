@@ -3,8 +3,6 @@ package messaging
 import (
 	"context"
 	"fmt"
-	"sync"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -18,12 +16,14 @@ type channelMapper interface {
 type ResponseMapper interface {
 	Push(ResponseInfo)
 	Pop(string) (string, error)
+	Length() int
 }
 
 type SubMapper interface {
 	Add(string, ...string)
 	Remove(string, ...string)
 	Subscribers(string) ([]string, error)
+	CheckForSubscriber(subject string, id string) bool
 }
 
 type NodeMapper interface {
@@ -43,304 +43,236 @@ type ClientNodeMapper interface {
 }
 
 type messageServer interface {
-	start(context.Context, *sync.WaitGroup) error
+	stop()
 	subscribe(string) <-chan Message
 }
 
-type messageClienter interface {
-	publish()
-	request()
-	response()
+type messageClientHandler interface {
+	stop()
+	publish(context.Context, Message) error
+	request(context.Context, Message) error
+	response(context.Context, Message) error
 }
 
-type NoObserverError struct {
+type nodeRegister interface {
+	stop()
+}
+
+type NoObserverChannelError struct {
 	Method string
 }
 
-func (err *NoObserverError) Error() string {
-	return fmt.Sprintf("%s: observer must be set", err.Method)
+func (err *NoObserverChannelError) Error() string {
+	return fmt.Sprintf("%s: observer channel must be set", err.Method)
 }
 
-type SendCourierMessageError struct {
-	Method string
-	Err    error
-}
-
-func (err *SendCourierMessageError) Error() string {
-	return fmt.Sprintf("%s: %s", err.Method, err.Err)
-}
-
-type CourierStartError struct {
+type SendMessagingServiceMessageError struct {
 	Method string
 	Err    error
 }
 
-func (err *CourierStartError) Error() string {
+func (err *SendMessagingServiceMessageError) Error() string {
 	return fmt.Sprintf("%s: %s", err.Method, err.Err)
 }
 
-// CourierOption is a set of options that may be passed as parameters when creating a Courier object
-type CourierOption func(c *Courier)
+type MessagingServiceStartError struct {
+	Method string
+	Err    error
+}
 
-// Subscribes sets the subjects the Courier services will listen for
-func Subscribes(subjects ...string) CourierOption {
-	return func(c *Courier) {
-		c.SubscribedSubjects = subjects
+func (err *MessagingServiceStartError) Error() string {
+	return fmt.Sprintf("%s: %s", err.Method, err.Err)
+}
+
+// MessagingServiceOption is a set of options that may be passed as parameters when creating a MessagingService object
+type MessagingServiceOption func(ms *MessagingService)
+
+// Subscribes sets the subjects the MessagingService services will listen for
+func Subscribes(subjects ...string) MessagingServiceOption {
+	return func(ms *MessagingService) {
+		ms.SubscribedSubjects = subjects
 	}
 }
 
-// Broadcasts sets the subjects Courier services will produce on
-func Broadcasts(subjects ...string) CourierOption {
-	return func(c *Courier) {
-		c.BroadcastedSubjects = subjects
+// Broadcasts sets the subjects MessagingService services will produce on
+func Broadcasts(subjects ...string) MessagingServiceOption {
+	return func(ms *MessagingService) {
+		ms.BroadcastedSubjects = subjects
 	}
 }
 
-// ListensOnAddress sets the address for the Courier service to be found on
-func WithHostname(hostname string) CourierOption {
-	return func(c *Courier) {
-		c.Hostname = hostname
+// ListensOnAddress sets the address for the MessagingService service to be found on
+func WithHostname(hostname string) MessagingServiceOption {
+	return func(ms *MessagingService) {
+		ms.Hostname = hostname
 	}
 }
 
-// ListensOnPort sets the port for the Courier service to serve on
-func WithPort(port string) CourierOption {
-	return func(c *Courier) {
-		c.Port = port
+// ListensOnPort sets the port for the MessagingService service to serve on
+func WithPort(port string) MessagingServiceOption {
+	return func(ms *MessagingService) {
+		ms.Port = port
 	}
 }
 
-// WithObserver sets what Observer will be looking for nodes
-func WithObserver(observer Observer) CourierOption {
-	return func(c *Courier) {
-		c.Observer = observer
+func WithClientNodeOptions(options ...ClientNodeOption) MessagingServiceOption {
+	return func(ms *MessagingService) {
+		ms.clientNodeOptions = append(ms.clientNodeOptions, options...)
 	}
 }
 
-func WithClientNodeOptions(options ...ClientNodeOption) CourierOption {
-	return func(c *Courier) {
-		c.clientNodeOptions = append(c.clientNodeOptions, options...)
+func WithObserverChannel(channel chan []Noder) MessagingServiceOption {
+	return func(ms *MessagingService) {
+		ms.observerChannel = channel
 	}
 }
 
-// WithMaxFailedMessageAttempts sets the max amount of attempts to send a message before blacklisting a node
-
-//WithGRPCServer sets the grpc server to be used for messaging between courier services.  Should only be used for testing
-func withCourierServer(server messageServer) CourierOption {
-	return func(c *Courier) {
-		c.server = server
+//WithMessagingServer sets the grpc server to be used for messaging between Courier services.  Should only be used for testing
+func withMessagingServer(server messageServer) MessagingServiceOption {
+	return func(ms *MessagingService) {
+		ms.server = server
 	}
 }
 
-// StartOnCreation tells the Courier service to start on creation or wait to be started.  Starts by default.
-func StartOnCreation(tf bool) CourierOption {
-	return func(c *Courier) {
-		c.StartOnCreation = tf
-	}
+// MessagingService is a messaging and node discovery service
+type MessagingService struct {
+	Id                  string
+	Hostname            string
+	Port                string
+	SubscribedSubjects  []string
+	BroadcastedSubjects []string
+	clientNodeOptions   []ClientNodeOption
+	observerChannel     chan []Noder
+	server              messageServer
+	client              messageClientHandler
+	registry            nodeRegister
+	running             bool
 }
 
-// Courier is a messaging and node discovery service
-type Courier struct {
-	Id                      string
-	Hostname                string
-	Port                    string
-	SubscribedSubjects      []string
-	BroadcastedSubjects     []string
-	Observer                Observer
-	attemptMetadata         attemptMetadata
-	clientNodeOptions       []ClientNodeOption
-	observerChannel         chan []Noder
-	newNodeChannel          chan Node
-	staleNodeChannel        chan Node
-	failedConnectionChannel chan Node
-	responseChannel         chan ResponseInfo
-	waitGroup               *sync.WaitGroup
-	cancelFunc              context.CancelFunc
-	blacklistNodes          NodeMapper
-	currentNodes            NodeMapper
-	clientNodes             ClientNodeMapper
-	clientSubscribers       SubMapper
-	responses               ResponseMapper
-	internalSubChannels     channelMapper
-	server                  messageServer
-	StartOnCreation         bool
-	running                 bool
-}
-
-// NewCourier creates a new Courier service
-func NewCourier(options ...CourierOption) (*Courier, error) {
-	c := &Courier{
+// NewMessagingService creates a new MessagingService service
+func NewMessagingService(options ...MessagingServiceOption) (*MessagingService, error) {
+	ms := &MessagingService{
 		Id:                  uuid.NewString(),
 		Port:                "8080",
 		SubscribedSubjects:  []string{},
 		BroadcastedSubjects: []string{},
-		attemptMetadata: attemptMetadata{
-			maxAttempts:  3,
-			waitInterval: time.Second,
-		},
-		clientNodeOptions:       []ClientNodeOption{},
-		Observer:                nil,
-		observerChannel:         make(chan []Noder),
-		newNodeChannel:          make(chan Node),
-		staleNodeChannel:        make(chan Node),
-		failedConnectionChannel: make(chan Node),
-		responseChannel:         make(chan ResponseInfo),
-		waitGroup:               &sync.WaitGroup{},
-		blacklistNodes:          NewNodeMap(),
-		currentNodes:            NewNodeMap(),
-		clientNodes:             newClientNodeMap(),
-		clientSubscribers:       newSubscriberMap(),
-		responses:               newResponseMap(),
-		internalSubChannels:     newChannelMap(),
-		StartOnCreation:         true,
-		server:                  nil,
-		running:                 false,
+		clientNodeOptions:   []ClientNodeOption{},
+		observerChannel:     make(chan []Noder),
+		server:              nil,
+		running:             false,
 	}
 
 	for _, option := range options {
-		option(c)
+		option(ms)
 	}
-	if c.Observer == nil {
-		return nil, &NoObserverError{
-			Method: "NewCourier",
+	if ms.Hostname == "" {
+		ms.Hostname = localIp()
+	}
+
+	if ms.observerChannel == nil {
+		return nil, &NoObserverChannelError{
+			Method: "NewMessagingService",
 		}
 	}
-	if c.Hostname == "" {
-		c.Hostname = localIp()
-	}
-	if len(c.clientNodeOptions) == 0 {
-		c.clientNodeOptions = append(c.clientNodeOptions, WithInsecure())
-	}
-	if c.server == nil {
-		c.server = NewgRPCServer(c.Port, c.responseChannel, c.internalSubChannels)
-		// for canceling the server
-		c.waitGroup.Add(1)
-	}
 
-	// one for each long running goroutine
-	c.waitGroup.Add(4)
+	responseChannel := make(chan ResponseInfo)
+	staleChannel := make(chan Node)
+	newChannel := make(chan Node)
+	failedChannel := make(chan Node)
 
-	if c.StartOnCreation {
-		err := c.Start()
+	var err error
+	if ms.server == nil {
+		ms.server, err = newMessagingServer(&messagingServerOptions{
+			port:            ms.Port,
+			responseChannel: responseChannel,
+			startServer:     true,
+		})
 		if err != nil {
-			return nil, &CourierStartError{
-				Method: "NewCourier",
+			return nil, &MessagingServiceStartError{
+				Method: "NewMessagingService",
 				Err:    err,
 			}
 		}
 	}
 
-	return c, nil
+	ms.client = newMessagingClient(
+		&messageClientOptions{
+			failedChannel:   failedChannel,
+			staleChannel:    staleChannel,
+			nodeChannel:     newChannel,
+			responseChannel: responseChannel,
+			currentId:       ms.Id,
+			clientOptions:   ms.clientNodeOptions,
+			startClient:     true,
+		})
+
+	ms.registry = newNodeRegistry(&nodeRegistryOptions{
+		observeChannel: ms.observerChannel,
+		newChannel:     newChannel,
+		failedChannel:  failedChannel,
+		staleChannel:   staleChannel,
+		startRegistry:  true,
+	})
+
+	ms.running = true
+	return ms, nil
 }
 
-func (c *Courier) Start() error {
-	ctx, cancel := context.WithCancel(context.Background())
-	c.cancelFunc = cancel
-
-	go registerNodes(ctx, c.waitGroup, c.observerChannel, c.newNodeChannel, c.staleNodeChannel, c.failedConnectionChannel, c.blacklistNodes, c.currentNodes)
-	go listenForResponseInfo(ctx, c.waitGroup, c.responseChannel, c.responses)
-	go listenForNewNodes(ctx, c.waitGroup, c.newNodeChannel, c.clientNodes, c.clientSubscribers, c.Id, c.clientNodeOptions...)
-	go listenForStaleNodes(ctx, c.waitGroup, c.staleNodeChannel, c.clientNodes, c.clientSubscribers)
-
-	err := c.server.start(ctx, c.waitGroup)
-	if err != nil {
-		return &CourierStartError{
-			Method: "Start",
-			Err:    err,
-		}
-	}
-
-	n := NewNode(c.Id, c.Hostname, c.Port, c.SubscribedSubjects, c.BroadcastedSubjects)
-
-	err = c.Observer.AddNode(n)
-	if err != nil {
-		return &CourierStartError{
-			Method: "Start",
-			Err:    err,
-		}
-	}
-
-	c.running = true
-	return nil
-}
-
-func (c *Courier) Stop() {
-	if !c.running {
+func (ms *MessagingService) Stop() {
+	if !ms.running {
 		return
 	}
 
-	c.cancelFunc()
-	c.waitGroup.Wait()
-	close(c.observerChannel)
-	close(c.responseChannel)
-	close(c.staleNodeChannel)
-	close(c.newNodeChannel)
-	close(c.failedConnectionChannel)
-	c.running = false
+	ms.server.stop()
+	ms.client.stop()
+	ms.registry.stop()
+	ms.running = false
 }
 
-func (c *Courier) Publish(ctx context.Context, subject string, content []byte) error {
+func (ms *MessagingService) Publish(ctx context.Context, subject string, content []byte) error {
 	msg := NewPubMessage(uuid.NewString(), subject, content)
 
-	ids, err := generateIdsBySubject(msg.Subject, c.clientSubscribers)
+	err := ms.client.publish(ctx, msg)
 	if err != nil {
-		return &SendCourierMessageError{
+		return &SendMessagingServiceMessageError{
 			Method: "Publish",
 			Err:    err,
 		}
 	}
 
-	cnodes := idToClientNodes(ids, c.clientNodes)
-	failed := fanMessageAttempts(cnodes, ctx, c.attemptMetadata, msg)
-	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
-
-	<-done
-
 	return nil
 }
 
-func (c *Courier) Request(ctx context.Context, subject string, content []byte) error {
+func (ms *MessagingService) Request(ctx context.Context, subject string, content []byte) error {
 	msg := NewReqMessage(uuid.NewString(), subject, content)
 
-	ids, err := generateIdsBySubject(msg.Subject, c.clientSubscribers)
+	err := ms.client.request(ctx, msg)
 	if err != nil {
-		return &SendCourierMessageError{
+		return &SendMessagingServiceMessageError{
 			Method: "Request",
 			Err:    err,
 		}
 	}
 
-	cnodes := idToClientNodes(ids, c.clientNodes)
-	failed := fanMessageAttempts(cnodes, ctx, c.attemptMetadata, msg)
-	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
-
-	<-done
-
 	return nil
 }
 
-func (c *Courier) Response(ctx context.Context, id string, subject string, content []byte) error {
+func (ms *MessagingService) Response(ctx context.Context, id string, subject string, content []byte) error {
 	msg := NewRespMessage(id, subject, content)
 
-	ids, err := generateIdsByMessage(msg.Id, c.responses)
+	err := ms.client.response(ctx, msg)
 	if err != nil {
-		return &SendCourierMessageError{
+		return &SendMessagingServiceMessageError{
 			Method: "Response",
 			Err:    err,
 		}
 	}
 
-	cnodes := idToClientNodes(ids, c.clientNodes)
-	failed := fanMessageAttempts(cnodes, ctx, c.attemptMetadata, msg)
-	done := forwardFailedConnections(failed, c.failedConnectionChannel, c.staleNodeChannel)
-
-	<-done
-
 	return nil
 }
 
-func (c *Courier) Subscribe(subject string) <-chan Message {
-	channel := c.server.subscribe(subject)
+func (ms *MessagingService) Subscribe(subject string) <-chan Message {
+	channel := ms.server.subscribe(subject)
 
 	return channel
 }

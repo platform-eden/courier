@@ -49,7 +49,7 @@ type ClientNodeOptions struct {
 	options []grpc.DialOption
 }
 
-// CourierOption is a set of options that may be passed as parameters when creating a Courier object
+// CLientNodeOption is a set of options that may be passed as parameters when creating a ClientNode
 type ClientNodeOption func(c *ClientNodeOptions) *ClientNodeOptions
 
 func NewClientNodeOptions() *ClientNodeOptions {

@@ -11,10 +11,11 @@ import (
 )
 
 type MockServer struct {
-	Messages  []*Message
-	Responses []*ResponseInfo
-	Lis       *bufconn.Listener
-	port      string
+	Messages   []*Message
+	Responses  []*ResponseInfo
+	Lis        *bufconn.Listener
+	port       string
+	channelMap channelMapper
 	proto.UnimplementedMessageServerServer
 	lock       Locker
 	shouldFail bool
@@ -27,6 +28,7 @@ func NewMockServer(lis *bufconn.Listener, port string, fail bool) *MockServer {
 		Responses:  []*ResponseInfo{},
 		Lis:        lis,
 		port:       port,
+		channelMap: newChannelMap(),
 		lock:       NewTicketLock(),
 		shouldFail: fail,
 		isRunning:  false,
@@ -37,20 +39,28 @@ func NewMockServer(lis *bufconn.Listener, port string, fail bool) *MockServer {
 
 func (m *MockServer) start(ctx context.Context, wg *sync.WaitGroup) error {
 	if m.isRunning {
+		if m.shouldFail {
+			return &ExpectedFailureError{}
+		}
 		return nil
 	}
 
 	server := grpc.NewServer()
 	proto.RegisterMessageServerServer(server, m)
 
-	go startCourierServer(ctx, wg, server, m.Lis, m.port)
+	go startMessagingServer(ctx, wg, server, m.Lis, m.port)
 
 	m.isRunning = true
 	return nil
 }
 
+func (m *MockServer) stop() {}
+
 func (m *MockServer) subscribe(subject string) <-chan Message {
-	return nil
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	return m.channelMap.Add(subject)
 }
 
 func (m *MockServer) SetToFail() {

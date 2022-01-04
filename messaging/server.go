@@ -12,10 +12,12 @@ import (
 	"google.golang.org/grpc"
 )
 
-type gRPCServer struct {
+type messagingServer struct {
 	port            string
 	responseChannel chan ResponseInfo
 	channelMap      channelMapper
+	waitGroup       *sync.WaitGroup
+	cancelFunc      context.CancelFunc
 	proto.UnimplementedMessageServerServer
 }
 
@@ -28,47 +30,67 @@ func (err *ChannelSubscriptionError) Error() string {
 	return fmt.Sprintf("%s: %s", err.Method, err.Err)
 }
 
-type gRPCServerStartError struct {
+type messagingServerStartError struct {
 	Method string
 	Err    error
 }
 
-func (err *gRPCServerStartError) Error() string {
+func (err *messagingServerStartError) Error() string {
 	return fmt.Sprintf("%s: %s", err.Method, err.Err)
 }
 
-func NewgRPCServer(port string, rchan chan ResponseInfo, chanMap channelMapper) *gRPCServer {
-	m := gRPCServer{
-		port:            port,
-		responseChannel: rchan,
-		channelMap:      chanMap,
-	}
-
-	return &m
+type messagingServerOptions struct {
+	port            string
+	responseChannel chan ResponseInfo
+	startServer     bool
 }
 
-func (s *gRPCServer) start(ctx context.Context, wg *sync.WaitGroup) error {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", s.port))
-	if err != nil {
-		return &gRPCServerStartError{
-			Method: "Start",
-			Err:    err,
+func newMessagingServer(options *messagingServerOptions) (*messagingServer, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	s := &messagingServer{
+		port:            options.port,
+		responseChannel: options.responseChannel,
+		channelMap:      newChannelMap(),
+		cancelFunc:      cancel,
+		waitGroup:       wg,
+	}
+
+	if options.startServer {
+		lis, err := net.Listen("tcp", fmt.Sprintf(":%s", s.port))
+		if err != nil {
+			return nil, &messagingServerStartError{
+				Method: "Start",
+				Err:    err,
+			}
 		}
+
+		server := grpc.NewServer()
+		proto.RegisterMessageServerServer(server, s)
+
+		go startMessagingServer(ctx, wg, server, lis, s.port)
 	}
 
-	server := grpc.NewServer()
-	proto.RegisterMessageServerServer(server, s)
-
-	go startCourierServer(ctx, wg, server, lis, s.port)
-
-	return nil
+	return s, nil
 }
 
-func (s *gRPCServer) subscribe(subject string) <-chan Message {
-	return s.channelMap.Add(subject)
+func (s *messagingServer) stop() {
+	s.cancelFunc()
+	s.waitGroup.Wait()
+
+	// close the channels we write on
+	close(s.responseChannel)
 }
 
-func (s *gRPCServer) PublishMessage(ctx context.Context, request *proto.PublishMessageRequest) (*proto.PublishMessageResponse, error) {
+func (s *messagingServer) subscribe(subject string) <-chan Message {
+	channel := s.channelMap.Add(subject)
+
+	return channel
+}
+
+func (s *messagingServer) PublishMessage(ctx context.Context, request *proto.PublishMessageRequest) (*proto.PublishMessageResponse, error) {
 	pub := NewPubMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
 
 	channels, err := s.channelMap.Subscriptions(pub.Subject)
@@ -87,7 +109,7 @@ func (s *gRPCServer) PublishMessage(ctx context.Context, request *proto.PublishM
 	return &response, nil
 }
 
-func (s *gRPCServer) RequestMessage(ctx context.Context, request *proto.RequestMessageRequest) (*proto.RequestMessageResponse, error) {
+func (s *messagingServer) RequestMessage(ctx context.Context, request *proto.RequestMessageRequest) (*proto.RequestMessageResponse, error) {
 	req := NewReqMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
 	info := ResponseInfo{
 		MessageId: request.Message.Id,
@@ -112,7 +134,7 @@ func (s *gRPCServer) RequestMessage(ctx context.Context, request *proto.RequestM
 	return &response, nil
 }
 
-func (s *gRPCServer) ResponseMessage(ctx context.Context, request *proto.ResponseMessageRequest) (*proto.ResponseMessageResponse, error) {
+func (s *messagingServer) ResponseMessage(ctx context.Context, request *proto.ResponseMessageRequest) (*proto.ResponseMessageResponse, error) {
 	resp := NewRespMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
 
 	channels, err := s.channelMap.Subscriptions(resp.Subject)
@@ -177,8 +199,8 @@ func localIp() string {
 	return localAddr.IP.String()
 }
 
-// startgRPCServer starts the message server on a given port
-func startCourierServer(ctx context.Context, wg *sync.WaitGroup, server *grpc.Server, lis net.Listener, port string) {
+// startmessagingServer starts the message server on a given port
+func startMessagingServer(ctx context.Context, wg *sync.WaitGroup, server *grpc.Server, lis net.Listener, port string) {
 	errchan := make(chan error, 1)
 	done := make(chan struct{})
 	defer close(errchan)
