@@ -20,22 +20,72 @@ type Observer interface {
 	RemoveNode(*Node) error
 }
 
+type nodeRegistry struct {
+	observeChannel <-chan []Noder
+	newChannel     chan Node
+	failedChannel  chan Node
+	staleChannel   chan Node
+	blacklist      NodeMapper
+	current        NodeMapper
+	waitGroup      *sync.WaitGroup
+	cancelFunc     context.CancelFunc
+}
+
+type nodeRegistryOptions struct {
+	observeChannel <-chan []Noder
+	newChannel     chan Node
+	failedChannel  chan Node
+	staleChannel   chan Node
+	startRegistry  bool
+}
+
+func newNodeRegistry(options *nodeRegistryOptions) *nodeRegistry {
+	ctx, cancel := context.WithCancel(context.Background())
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	r := &nodeRegistry{
+		observeChannel: options.observeChannel,
+		newChannel:     options.newChannel,
+		failedChannel:  options.failedChannel,
+		staleChannel:   options.staleChannel,
+		waitGroup:      wg,
+		cancelFunc:     cancel,
+		blacklist:      NewNodeMap(),
+		current:        NewNodeMap(),
+	}
+
+	if options.startRegistry {
+		go r.registerNodes(ctx, wg)
+	}
+	return r
+}
+
+func (registry *nodeRegistry) stop() {
+	registry.cancelFunc()
+	registry.waitGroup.Wait()
+
+	// close the channels we write on
+	close(registry.newChannel)
+	close(registry.staleChannel)
+}
+
 // registerNodes either receives new nodes to be sifted and sent out of the newChannel or receives nodes that could not receive a message that need to be blacklisted.
-func registerNodes(ctx context.Context, wg *sync.WaitGroup, ochan <-chan []Noder, nchan chan Node, schan chan Node, fchan <-chan Node, blacklist NodeMapper, current NodeMapper) {
+func (registry *nodeRegistry) registerNodes(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case noders := <-ochan:
-			blacklisted, cll := updateNodes(noders, nchan, schan, blacklist, current)
-			blacklist.Update(blacklisted...)
-			current.Update(cll...)
+		case noders := <-registry.observeChannel:
+			blacklisted, cll := updateNodes(noders, registry.newChannel, registry.staleChannel, registry.blacklist, registry.current)
+			registry.blacklist.Update(blacklisted...)
+			registry.current.Update(cll...)
 
-		case n := <-fchan:
-			blacklist.Add(n)
-			current.Remove(n.id)
+		case n := <-registry.failedChannel:
+			registry.blacklist.Add(n)
+			registry.current.Remove(n.id)
 		}
 	}
 }

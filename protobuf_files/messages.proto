@@ -1,5 +1,5 @@
 syntax = "proto3";
-package courier;
+package messaging;
 
 option go_package = "/messaging/proto";
 

@@ -26,10 +26,368 @@ func TestNodeIdGenerationError_Error(t *testing.T) {
 	}
 }
 
-/**************************************************************
-Expected Outcomes:
-- all info passed in will get pushed into responseMap
-**************************************************************/
+func TestMessagingClient_Stop(t *testing.T) {
+	fchan := make(chan Node)
+	schan := make(chan Node)
+	nchan := make(chan Node)
+	rchan := make(chan ResponseInfo)
+
+	client := newMessagingClient(&messageClientOptions{
+		failedChannel:   fchan,
+		staleChannel:    schan,
+		nodeChannel:     nchan,
+		responseChannel: rchan,
+		currentId:       "testId",
+		clientOptions:   []ClientNodeOption{},
+		startClient:     true,
+	})
+
+	client.stop()
+}
+
+func TestMessagingClient_Publish(t *testing.T) {
+	type test struct {
+		nodeCount       int
+		nodeSubject     string
+		messageSubject  string
+		expectedFailure bool
+	}
+
+	tests := []test{
+		{
+			nodeCount:       5,
+			nodeSubject:     "test",
+			messageSubject:  "test",
+			expectedFailure: false,
+		},
+		{
+			nodeCount:       1,
+			nodeSubject:     "test",
+			messageSubject:  "fail",
+			expectedFailure: true,
+		},
+	}
+
+	for _, tc := range tests {
+		if tc.expectedFailure {
+			testMessageServer.SetToFail()
+		} else {
+			testMessageServer.SetToPass()
+		}
+		testMessageServer.Clear()
+
+		nodes := CreateTestNodes(tc.nodeCount, &TestNodeOptions{})
+		fchan := make(chan Node)
+		schan := make(chan Node)
+		nchan := make(chan Node)
+		rchan := make(chan ResponseInfo)
+
+		client := newMessagingClient(&messageClientOptions{
+			failedChannel:   fchan,
+			staleChannel:    schan,
+			nodeChannel:     nchan,
+			responseChannel: rchan,
+			currentId:       "testId",
+			clientOptions:   []ClientNodeOption{},
+			startClient:     true,
+		})
+
+		for _, n := range nodes {
+			client.subscribers.Add(n.id, tc.nodeSubject)
+			_, conn, err := NewMockClient("bufnet", testMessageServer.BufDialer)
+			if err != nil {
+				t.Fatalf("could not create grpc client: %s", err)
+			}
+
+			cn := clientNode{
+				Node:       *n,
+				connection: conn,
+				currentId:  client.currentId,
+			}
+
+			client.clientNodes.Add(cn)
+		}
+
+		done := make(chan struct{})
+		errchan := make(chan error)
+		go func() {
+			msg := NewPubMessage(uuid.NewString(), tc.messageSubject, []byte("test"))
+			err := client.publish(context.Background(), msg)
+			if err != nil {
+				errchan <- err
+			}
+
+			close(done)
+		}()
+
+	doneloop:
+		for {
+			select {
+			case <-done:
+				if !tc.expectedFailure {
+					if testMessageServer.MessagesLength() != tc.nodeCount {
+						t.Fatalf("expected %v messages to be sent but got %v instead", tc.nodeCount, testMessageServer.MessagesLength())
+					}
+				}
+				break doneloop
+			case err := <-errchan:
+				if !tc.expectedFailure {
+					client.stop()
+					close(errchan)
+					t.Fatalf("could not request message: %s", err)
+				}
+				continue
+			case <-time.After(time.Second * 3):
+				t.Fatalf("did not send Publish in time")
+			}
+		}
+		client.stop()
+		close(errchan)
+	}
+}
+
+func TestMessagingClient_Request(t *testing.T) {
+	defer testMessageServer.SetToPass()
+
+	type test struct {
+		nodeCount       int
+		nodeSubject     string
+		messageSubject  string
+		expectedFailure bool
+	}
+
+	tests := []test{
+		{
+			nodeCount:       5,
+			nodeSubject:     "test",
+			messageSubject:  "test",
+			expectedFailure: false,
+		},
+		{
+			nodeCount:       1,
+			nodeSubject:     "test",
+			messageSubject:  "fail",
+			expectedFailure: true,
+		},
+		{
+			nodeCount:       1,
+			nodeSubject:     "test",
+			messageSubject:  "fail",
+			expectedFailure: true,
+		},
+		{
+			nodeCount:       1,
+			nodeSubject:     "test",
+			messageSubject:  "fail",
+			expectedFailure: true,
+		},
+	}
+
+	for _, tc := range tests {
+		if tc.expectedFailure {
+			testMessageServer.SetToFail()
+		} else {
+			testMessageServer.SetToPass()
+		}
+
+		testMessageServer.Clear()
+
+		nodes := CreateTestNodes(tc.nodeCount, &TestNodeOptions{})
+		fchan := make(chan Node)
+		schan := make(chan Node)
+		nchan := make(chan Node)
+		rchan := make(chan ResponseInfo)
+
+		client := newMessagingClient(&messageClientOptions{
+			failedChannel:   fchan,
+			staleChannel:    schan,
+			nodeChannel:     nchan,
+			responseChannel: rchan,
+			currentId:       "testId",
+			clientOptions:   []ClientNodeOption{},
+			startClient:     true,
+		})
+
+		for _, n := range nodes {
+			client.subscribers.Add(n.id, tc.nodeSubject)
+			_, conn, err := NewMockClient("bufnet", testMessageServer.BufDialer)
+			if err != nil {
+				t.Fatalf("could not create grpc client: %s", err)
+			}
+
+			cn := clientNode{
+				Node:       *n,
+				connection: conn,
+				currentId:  client.currentId,
+			}
+
+			client.clientNodes.Add(cn)
+		}
+
+		done := make(chan struct{})
+		errchan := make(chan error)
+		go func() {
+			msg := NewReqMessage(uuid.NewString(), tc.messageSubject, []byte("test"))
+			err := client.request(context.Background(), msg)
+			if err != nil {
+				errchan <- err
+			}
+
+			close(done)
+		}()
+
+	doneloop:
+		for {
+			select {
+			case <-done:
+				if !tc.expectedFailure {
+					if testMessageServer.MessagesLength() != tc.nodeCount {
+						t.Fatalf("expected %v messages to be sent but got %v instead", tc.nodeCount, testMessageServer.MessagesLength())
+					}
+
+					if testMessageServer.ResponsesLength() != tc.nodeCount {
+						t.Fatalf("expected %v responses to be sent but got %v instead", tc.nodeCount, testMessageServer.ResponsesLength())
+					}
+				}
+				break doneloop
+			case err := <-errchan:
+				if !tc.expectedFailure {
+					client.stop()
+					close(errchan)
+					t.Fatalf("could not request message: %s", err)
+				}
+				continue
+			case <-time.After(time.Second * 3):
+				t.Fatalf("did not send Response in time")
+			}
+		}
+		client.stop()
+		close(errchan)
+	}
+}
+
+func TestMessagingClient_Response(t *testing.T) {
+	defer testMessageServer.SetToPass()
+
+	type test struct {
+		nodeCount       int
+		subject         string
+		badMessageId    bool
+		expectedFailure bool
+	}
+
+	tests := []test{
+		{
+			nodeCount:       5,
+			subject:         "test",
+			badMessageId:    false,
+			expectedFailure: false,
+		},
+		{
+			nodeCount:       1,
+			subject:         "test",
+			badMessageId:    true,
+			expectedFailure: true,
+		},
+	}
+
+	for _, tc := range tests {
+		if tc.expectedFailure {
+			testMessageServer.SetToFail()
+		} else {
+			testMessageServer.SetToPass()
+		}
+		testMessageServer.Clear()
+
+		nodes := CreateTestNodes(tc.nodeCount, &TestNodeOptions{})
+		fchan := make(chan Node)
+		schan := make(chan Node)
+		nchan := make(chan Node)
+		rchan := make(chan ResponseInfo)
+
+		client := newMessagingClient(&messageClientOptions{
+			failedChannel:   fchan,
+			staleChannel:    schan,
+			nodeChannel:     nchan,
+			responseChannel: rchan,
+			currentId:       "testId",
+			clientOptions:   []ClientNodeOption{},
+			startClient:     true,
+		})
+
+		messageIds := []string{}
+		_, conn, err := NewMockClient("bufnet", testMessageServer.BufDialer)
+		if err != nil {
+			t.Fatalf("could not create mock client: %s", err)
+		}
+
+		for _, node := range nodes {
+			cn := clientNode{
+				Node:       *node,
+				connection: conn,
+				currentId:  client.currentId,
+			}
+
+			client.clientNodes.Add(cn)
+
+			id := uuid.NewString()
+			messageIds = append(messageIds, id)
+
+			if tc.badMessageId {
+				client.responses.Push(ResponseInfo{
+					NodeId:    node.id,
+					MessageId: "badId",
+				})
+			} else {
+				client.responses.Push(ResponseInfo{
+					NodeId:    node.id,
+					MessageId: id,
+				})
+			}
+		}
+
+		errchan := make(chan error)
+		done := make(chan struct{})
+
+		go func() {
+			ctx := context.Background()
+			for _, id := range messageIds {
+				msg := NewRespMessage(id, tc.subject, []byte("test"))
+				err := client.response(ctx, msg)
+				if err != nil {
+					errchan <- err
+				}
+			}
+
+			close(done)
+		}()
+
+	doneloop:
+		for {
+			select {
+			case <-done:
+				if !tc.expectedFailure {
+					if testMessageServer.MessagesLength() != tc.nodeCount {
+						t.Fatalf("expected messages sent to be %v but got %v", tc.nodeCount, testMessageServer.MessagesLength())
+					}
+				}
+				break doneloop
+			case err := <-errchan:
+				if !tc.expectedFailure {
+					client.stop()
+					close(errchan)
+					t.Fatalf("expected test to pass but it failed sending response: %s", err)
+				}
+			case <-time.After(time.Second * 10):
+				t.Fatal("did not finish sending responses in time")
+			}
+		}
+
+		client.stop()
+		close(errchan)
+	}
+}
+
 func TestListenForResponseInfo(t *testing.T) {
 	type test struct {
 		responseCount int
@@ -43,12 +401,26 @@ func TestListenForResponseInfo(t *testing.T) {
 
 	for _, tc := range tests {
 		responses := []ResponseInfo{}
-		rchan := make(chan ResponseInfo)
-		respMap := newResponseMap()
 		wg := &sync.WaitGroup{}
 		ctx, cancel := context.WithCancel(context.Background())
 		defer wg.Add(1)
 		defer cancel()
+		fchan := make(chan Node)
+		schan := make(chan Node)
+		nchan := make(chan Node)
+		rchan := make(chan ResponseInfo)
+
+		client := newMessagingClient(&messageClientOptions{
+			failedChannel:   fchan,
+			staleChannel:    schan,
+			nodeChannel:     nchan,
+			responseChannel: rchan,
+			currentId:       "testId",
+			clientOptions:   []ClientNodeOption{},
+			startClient:     false,
+		})
+
+		go client.listenForResponseInfo(ctx, wg)
 
 		for i := 0; i < tc.responseCount; i++ {
 			info := ResponseInfo{
@@ -59,16 +431,15 @@ func TestListenForResponseInfo(t *testing.T) {
 			responses = append(responses, info)
 		}
 
-		go listenForResponseInfo(ctx, wg, rchan, respMap)
-
 		for _, r := range responses {
 			rchan <- r
 		}
+
 		defer close(rchan)
 
 		done := make(chan bool)
 		go func() {
-			for respMap.Length() != tc.responseCount {
+			for client.responses.Length() != tc.responseCount {
 				time.Sleep(time.Millisecond * 200)
 			}
 
@@ -95,44 +466,51 @@ func TestListenForResponseInfo(t *testing.T) {
 		case <-time.After(time.Second * 3):
 			t.Fatal("didn't complete wait group in time")
 		}
+
+		close(fchan)
+		close(schan)
+		close(rchan)
+		close(nchan)
 	}
 }
 
-/**************************************************************
-Expected Outcomes:
-- all nodes passed in should be turned into clientNodes
-- nodes that erred on clientNode creation should be skipped
-- all nodes passed in should be added to the subjects they subscribe to in subscribeMap
-**************************************************************/
 func TestListenForNewNodes(t *testing.T) {
 	type test struct {
 		newNodes int
-		options  []ClientNodeOption
 	}
 
 	tests := []test{
 		{
 			newNodes: 10,
-			options:  []ClientNodeOption{WithDialOptions(grpc.WithInsecure())},
 		},
 		{
 			newNodes: 100,
-			options:  []ClientNodeOption{WithDialOptions(grpc.WithInsecure())},
 		},
 	}
 
 	for _, tc := range tests {
-		nodeMap := newClientNodeMap()
-		subMap := newSubscriberMap()
 		subjects := []string{"test", "test1", "test2"}
 		nodes := CreateTestNodes(tc.newNodes, &TestNodeOptions{SubscribedSubjects: subjects})
-		nchan := make(chan Node)
 		wg := &sync.WaitGroup{}
 		ctx, cancel := context.WithCancel(context.Background())
 		defer wg.Add(1)
 		defer cancel()
+		fchan := make(chan Node)
+		schan := make(chan Node)
+		nchan := make(chan Node)
+		rchan := make(chan ResponseInfo)
 
-		go listenForNewNodes(ctx, wg, nchan, nodeMap, subMap, uuid.NewString(), tc.options...)
+		client := newMessagingClient(&messageClientOptions{
+			failedChannel:   fchan,
+			staleChannel:    schan,
+			nodeChannel:     nchan,
+			responseChannel: rchan,
+			currentId:       "testId",
+			clientOptions:   []ClientNodeOption{},
+			startClient:     false,
+		})
+
+		go client.listenForNewNodes(ctx, wg)
 
 		for _, n := range nodes {
 			nchan <- *n
@@ -141,7 +519,7 @@ func TestListenForNewNodes(t *testing.T) {
 
 		done := make(chan bool)
 
-		checkSubMap := func(nodes []*Node, smap *subscriberMap) bool {
+		checkSubMap := func(nodes []*Node, smap SubMapper) bool {
 			for _, n := range nodes {
 				for _, subject := range n.subscribedSubjects {
 					exist := smap.CheckForSubscriber(subject, n.id)
@@ -155,7 +533,7 @@ func TestListenForNewNodes(t *testing.T) {
 		}
 
 		go func() {
-			for nodeMap.Length() != tc.newNodes && !checkSubMap(nodes, subMap) {
+			for client.clientNodes.Length() != tc.newNodes && !checkSubMap(nodes, client.subscribers) {
 				time.Sleep(time.Millisecond * 200)
 			}
 
@@ -166,9 +544,6 @@ func TestListenForNewNodes(t *testing.T) {
 		select {
 		case <-done:
 		case <-time.After(time.Millisecond * 300):
-			if len(tc.options) == 0 {
-				continue
-			}
 			t.Fatal("nodes not added in time")
 		}
 
@@ -186,13 +561,14 @@ func TestListenForNewNodes(t *testing.T) {
 		case <-time.After(time.Second * 3):
 			t.Fatal("didn't complete wait group in time")
 		}
+
+		close(fchan)
+		close(schan)
+		close(rchan)
+		close(nchan)
 	}
 }
 
-/**************************************************************
-Expected Outcomes:
-- all nodes passed in should be removed from
-**************************************************************/
 func TestListenForStaleNodes(t *testing.T) {
 	type test struct {
 		staleNodes int
@@ -208,24 +584,35 @@ func TestListenForStaleNodes(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		nodeMap := newClientNodeMap()
-		subMap := newSubscriberMap()
 		subjects := []string{"test", "test1", "test2"}
 		nodes := CreateTestNodes(tc.staleNodes, &TestNodeOptions{SubscribedSubjects: subjects})
-		schan := make(chan Node)
 		wg := &sync.WaitGroup{}
 		ctx, cancel := context.WithCancel(context.Background())
 		defer wg.Add(1)
 		defer cancel()
+		fchan := make(chan Node, tc.staleNodes)
+		schan := make(chan Node)
+		nchan := make(chan Node)
+		rchan := make(chan ResponseInfo)
+
+		client := newMessagingClient(&messageClientOptions{
+			failedChannel:   fchan,
+			staleChannel:    schan,
+			nodeChannel:     nchan,
+			responseChannel: rchan,
+			currentId:       "testId",
+			clientOptions:   []ClientNodeOption{},
+			startClient:     false,
+		})
 
 		for _, n := range nodes {
-			subMap.Add(n.id, n.subscribedSubjects...)
-			nodeMap.Add(clientNode{
+			client.subscribers.Add(n.id, n.subscribedSubjects...)
+			client.clientNodes.Add(clientNode{
 				Node: *n,
 			})
 		}
 
-		go listenForStaleNodes(ctx, wg, schan, nodeMap, subMap)
+		go client.listenForStaleNodes(ctx, wg)
 
 		for _, n := range nodes {
 			schan <- *n
@@ -234,7 +621,7 @@ func TestListenForStaleNodes(t *testing.T) {
 
 		done := make(chan bool)
 
-		checkSubMap := func(nodes []*Node, smap *subscriberMap) bool {
+		checkSubMap := func(nodes []*Node, smap SubMapper) bool {
 			for _, n := range nodes {
 				for _, subject := range n.subscribedSubjects {
 					exist := smap.CheckForSubscriber(subject, n.id)
@@ -248,7 +635,7 @@ func TestListenForStaleNodes(t *testing.T) {
 		}
 
 		go func() {
-			for nodeMap.Length() != 0 && !checkSubMap(nodes, subMap) {
+			for client.clientNodes.Length() != 0 && !checkSubMap(nodes, client.subscribers) {
 				time.Sleep(time.Millisecond * 200)
 			}
 
@@ -276,15 +663,14 @@ func TestListenForStaleNodes(t *testing.T) {
 		case <-time.After(time.Second * 3):
 			t.Fatal("didn't complete wait group in time")
 		}
+
+		close(fchan)
+		close(schan)
+		close(rchan)
+		close(nchan)
 	}
 }
 
-/**************************************************************
-Expected Outcomes:
-- should take in a subject and find all node ids subscribed to that subject
-- returns an error if subject doesn't exist
-- all node ids subscribed to that subject are sent through the out channel
-**************************************************************/
 func TestGenerateIdsBySubject(t *testing.T) {
 	type test struct {
 		expectedFailure bool
@@ -335,11 +721,6 @@ func TestGenerateIdsBySubject(t *testing.T) {
 	}
 }
 
-/**************************************************************
-Expected Outcomes:
-- should return a channel of string holding nodeIds
-- should return an error if responseMap doesn't have a messageId that matches the given one
-**************************************************************/
 func TestGenerateIdsByMessage(t *testing.T) {
 	type test struct {
 		messageCount    int
@@ -399,11 +780,6 @@ func TestGenerateIdsByMessage(t *testing.T) {
 	}
 }
 
-/**************************************************************
-Expected Outcomes:
-- all ids passed in with a valid node will have a clientNode passed out
-- all ids that don't have a valid node wil be skipped
-**************************************************************/
 func TestIdToClientNodes(t *testing.T) {
 	type test struct {
 		nodeCount    int
@@ -460,12 +836,6 @@ func TestIdToClientNodes(t *testing.T) {
 	}
 }
 
-/**************************************************************
-Expected Outcomes:
-- all courierClients passed in should have a message attempted
-- all failing send attempts should pass the node they failed on through the out channel
-- out channel should close once all courierClients are passed through
-**************************************************************/
 func TestFanMessageAttempts(t *testing.T) {
 	type test struct {
 		failures    int
@@ -488,10 +858,6 @@ func TestFanMessageAttempts(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		metadata := attemptMetadata{
-			maxAttempts:  1,
-			waitInterval: time.Millisecond * 100,
-		}
 		ctx := context.Background()
 		msg := NewPubMessage("test", "test", []byte("test"))
 		nodes := CreateTestNodes(tc.clientCount, &TestNodeOptions{})
@@ -510,7 +876,7 @@ func TestFanMessageAttempts(t *testing.T) {
 			in <- c
 		}
 
-		out := fanMessageAttempts(in, ctx, metadata, msg)
+		out := fanMessageAttempts(in, ctx, msg)
 
 		close(in)
 		count := 0
@@ -524,12 +890,6 @@ func TestFanMessageAttempts(t *testing.T) {
 	}
 }
 
-/**************************************************************
-Expected Outcomes:
-- should complete withouot passing anything through the nchan on successful send
-- should send the node that it failed to connect to through the nchan
-- should mark wait group as complete when finished whether passing or failing
-**************************************************************/
 func TestAttemptMessage(t *testing.T) {
 	type test struct {
 		expectedFailure bool
@@ -595,12 +955,21 @@ func TestForwardFailedMessages(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		schan := make(chan Node, tc.nodeCount)
+		subscribers := newSubscriberMap()
+		clientNodes := newClientNodeMap()
 		fchan := make(chan Node, tc.nodeCount)
 		in := make(chan Node)
 		nodes := CreateTestNodes(tc.nodeCount, &TestNodeOptions{})
 
-		out := forwardFailedConnections(in, fchan, schan)
+		out := forwardFailedConnections(in, clientNodes, subscribers, fchan)
+
+		for _, n := range nodes {
+			n.subscribedSubjects = []string{"test"}
+			subscribers.Add(n.id, "test")
+			clientNodes.Add(clientNode{
+				Node: *n,
+			})
+		}
 
 		go func() {
 			for _, n := range nodes {
@@ -616,22 +985,24 @@ func TestForwardFailedMessages(t *testing.T) {
 			t.Fatal("did not receive done")
 		}
 
-		close(schan)
 		close(fchan)
-
 		fcount := 0
 		for range fchan {
 			fcount++
 		}
 
-		scount := 0
-		for range schan {
-			scount++
+		if fcount != tc.nodeCount {
+			t.Fatalf("expected %v failed nodes but got %v", tc.nodeCount, fcount)
 		}
 
-		if scount != tc.nodeCount || fcount != tc.nodeCount {
-			t.Fatalf("mismatched counts: expected: %v, fchan: %v, schan: %v", tc.nodeCount, fcount, scount)
+		for _, n := range nodes {
+			if subscribers.CheckForSubscriber("test", n.id) {
+				t.Fatalf("subscriber %s was not removed", n.id)
+			}
 		}
 
+		if clientNodes.Length() != 0 {
+			t.Fatalf("expected clientNode length to be 0 but got %v", clientNodes.Length())
+		}
 	}
 }

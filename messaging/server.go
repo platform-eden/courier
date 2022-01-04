@@ -12,10 +12,12 @@ import (
 	"google.golang.org/grpc"
 )
 
-type MessageServer struct {
+type messagingServer struct {
 	port            string
 	responseChannel chan ResponseInfo
 	channelMap      channelMapper
+	waitGroup       *sync.WaitGroup
+	cancelFunc      context.CancelFunc
 	proto.UnimplementedMessageServerServer
 }
 
@@ -28,46 +30,70 @@ func (err *ChannelSubscriptionError) Error() string {
 	return fmt.Sprintf("%s: %s", err.Method, err.Err)
 }
 
-type MessageServerStartError struct {
+type messagingServerStartError struct {
 	Method string
 	Err    error
 }
 
-func (err *MessageServerStartError) Error() string {
+func (err *messagingServerStartError) Error() string {
 	return fmt.Sprintf("%s: %s", err.Method, err.Err)
 }
 
-func NewMessageServer(port string, rchan chan ResponseInfo, chanMap channelMapper) *MessageServer {
-	m := MessageServer{
-		port:            port,
-		responseChannel: rchan,
-		channelMap:      chanMap,
-	}
-
-	return &m
+type messagingServerOptions struct {
+	port            string
+	responseChannel chan ResponseInfo
+	startServer     bool
 }
 
-func (m *MessageServer) Start(ctx context.Context, wg *sync.WaitGroup) error {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", m.port))
-	if err != nil {
-		return &MessageServerStartError{
-			Method: "Start",
-			Err:    err,
+func newMessagingServer(options *messagingServerOptions) (*messagingServer, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	s := &messagingServer{
+		port:            options.port,
+		responseChannel: options.responseChannel,
+		channelMap:      newChannelMap(),
+		cancelFunc:      cancel,
+		waitGroup:       wg,
+	}
+
+	if options.startServer {
+		lis, err := net.Listen("tcp", fmt.Sprintf(":%s", s.port))
+		if err != nil {
+			return nil, &messagingServerStartError{
+				Method: "Start",
+				Err:    err,
+			}
 		}
+
+		server := grpc.NewServer()
+		proto.RegisterMessageServerServer(server, s)
+
+		go startMessagingServer(ctx, wg, server, lis, s.port)
 	}
 
-	server := grpc.NewServer()
-	proto.RegisterMessageServerServer(server, m)
-
-	go startCourierServer(ctx, wg, server, lis, m.port)
-
-	return nil
+	return s, nil
 }
 
-func (m *MessageServer) PublishMessage(ctx context.Context, request *proto.PublishMessageRequest) (*proto.PublishMessageResponse, error) {
+func (s *messagingServer) stop() {
+	s.cancelFunc()
+	s.waitGroup.Wait()
+
+	// close the channels we write on
+	close(s.responseChannel)
+}
+
+func (s *messagingServer) subscribe(subject string) <-chan Message {
+	channel := s.channelMap.Add(subject)
+
+	return channel
+}
+
+func (s *messagingServer) PublishMessage(ctx context.Context, request *proto.PublishMessageRequest) (*proto.PublishMessageResponse, error) {
 	pub := NewPubMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
 
-	channels, err := m.channelMap.Subscriptions(pub.Subject)
+	channels, err := s.channelMap.Subscriptions(pub.Subject)
 	if err != nil {
 		return nil, &ChannelSubscriptionError{
 			Method: "PublishMessage",
@@ -83,16 +109,16 @@ func (m *MessageServer) PublishMessage(ctx context.Context, request *proto.Publi
 	return &response, nil
 }
 
-func (m *MessageServer) RequestMessage(ctx context.Context, request *proto.RequestMessageRequest) (*proto.RequestMessageResponse, error) {
+func (s *messagingServer) RequestMessage(ctx context.Context, request *proto.RequestMessageRequest) (*proto.RequestMessageResponse, error) {
 	req := NewReqMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
 	info := ResponseInfo{
 		MessageId: request.Message.Id,
 		NodeId:    request.Message.NodeId,
 	}
 
-	m.responseChannel <- info
+	s.responseChannel <- info
 
-	channels, err := m.channelMap.Subscriptions(req.Subject)
+	channels, err := s.channelMap.Subscriptions(req.Subject)
 	if err != nil {
 		return nil, &ChannelSubscriptionError{
 			Method: "RequestMessage",
@@ -108,10 +134,10 @@ func (m *MessageServer) RequestMessage(ctx context.Context, request *proto.Reque
 	return &response, nil
 }
 
-func (m *MessageServer) ResponseMessage(ctx context.Context, request *proto.ResponseMessageRequest) (*proto.ResponseMessageResponse, error) {
+func (s *messagingServer) ResponseMessage(ctx context.Context, request *proto.ResponseMessageRequest) (*proto.ResponseMessageResponse, error) {
 	resp := NewRespMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
 
-	channels, err := m.channelMap.Subscriptions(resp.Subject)
+	channels, err := s.channelMap.Subscriptions(resp.Subject)
 	if err != nil {
 		return nil, &ChannelSubscriptionError{
 			Method: "ResponseMessage",
@@ -173,8 +199,8 @@ func localIp() string {
 	return localAddr.IP.String()
 }
 
-// startMessageServer starts the message server on a given port
-func startCourierServer(ctx context.Context, wg *sync.WaitGroup, server *grpc.Server, lis net.Listener, port string) {
+// startmessagingServer starts the message server on a given port
+func startMessagingServer(ctx context.Context, wg *sync.WaitGroup, server *grpc.Server, lis net.Listener, port string) {
 	errchan := make(chan error, 1)
 	done := make(chan struct{})
 	defer close(errchan)

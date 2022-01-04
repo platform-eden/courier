@@ -7,14 +7,23 @@ import (
 	"time"
 )
 
-/*************************************************************
-Expected Outcomes:
-- nodes passed into failed connections channel should be added to blacklisted nodes
-- nodes passed into failed connections channel should be removed from current nodes
-- observe pipeline should be ran every n seconds based on interval
-- blacklist and current nodes should be updated after every observe pipeline
-*************************************************************/
-func TestRegisterNodes(t *testing.T) {
+func TestNodeRegistry_Stop(t *testing.T) {
+	ochan := make(chan []Noder)
+	registry := newNodeRegistry(&nodeRegistryOptions{
+		observeChannel: ochan,
+		newChannel:     make(chan Node),
+		staleChannel:   make(chan Node),
+		failedChannel:  make(chan Node),
+		startRegistry:  true,
+	})
+
+	registry.stop()
+
+	close(ochan)
+	close(registry.failedChannel)
+}
+
+func TestNodeRegistry_RegisterNodes(t *testing.T) {
 	type test struct {
 		blackListCount int
 		currentCount   int
@@ -45,23 +54,37 @@ func TestRegisterNodes(t *testing.T) {
 		nchan := make(chan Node, len(nodes))
 		schan := make(chan Node, len(nodes))
 		fchan := make(chan Node)
-		blacklist := NewNodeMap(RemovePointers(bln)...)
-		current := NewNodeMap(RemovePointers(cln)...)
 		ctx, cancel := context.WithCancel(context.Background())
 		wg := &sync.WaitGroup{}
 		defer wg.Add(1)
 		defer cancel()
 
-		go registerNodes(ctx, wg, ochan, nchan, schan, fchan, blacklist, current)
+		registry := newNodeRegistry(&nodeRegistryOptions{
+			observeChannel: ochan,
+			newChannel:     nchan,
+			staleChannel:   schan,
+			failedChannel:  fchan,
+			startRegistry:  false,
+		})
 
-		current.Add(*fn)
+		for _, n := range bln {
+			registry.blacklist.Add(*n)
+		}
+
+		for _, n := range cln {
+			registry.current.Add(*n)
+		}
+
+		go registry.registerNodes(ctx, wg)
+
+		registry.current.Add(*fn)
 		fchan <- *fn
 
 		count := 0
 		for {
-			_, exist1 := blacklist.Node(fn.id)
+			_, exist1 := registry.blacklist.Node(fn.id)
 			if exist1 {
-				_, exist2 := current.Node(fn.id)
+				_, exist2 := registry.current.Node(fn.id)
 				if !exist2 {
 					break
 				}
@@ -82,7 +105,7 @@ func TestRegisterNodes(t *testing.T) {
 		ochan <- noders
 		doneChannel := make(chan struct{})
 		go func() {
-			for current.Length() != tc.currentCount+tc.newNodeCount {
+			for registry.current.Length() != tc.currentCount+tc.newNodeCount {
 				time.Sleep(time.Millisecond * 300)
 			}
 
