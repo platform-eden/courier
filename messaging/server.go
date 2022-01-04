@@ -12,6 +12,12 @@ import (
 	"google.golang.org/grpc"
 )
 
+type channelMapper interface {
+	Add(string) <-chan Message
+	Subscriptions(string) ([]chan Message, error)
+	Close()
+}
+
 type messagingServer struct {
 	port            string
 	responseChannel chan ResponseInfo

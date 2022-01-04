@@ -7,41 +7,6 @@ import (
 	"github.com/google/uuid"
 )
 
-type channelMapper interface {
-	Add(string) <-chan Message
-	Subscriptions(string) ([]chan Message, error)
-	Close()
-}
-
-type ResponseMapper interface {
-	Push(ResponseInfo)
-	Pop(string) (string, error)
-	Length() int
-}
-
-type SubMapper interface {
-	Add(string, ...string)
-	Remove(string, ...string)
-	Subscribers(string) ([]string, error)
-	CheckForSubscriber(subject string, id string) bool
-}
-
-type NodeMapper interface {
-	Node(string) (Node, bool)
-	Nodes() map[string]Node
-	Update(...Node)
-	Add(Node)
-	Remove(string)
-	Length() int
-}
-
-type ClientNodeMapper interface {
-	Node(string) (clientNode, bool)
-	Add(clientNode)
-	Remove(string)
-	Length() int
-}
-
 type messageServer interface {
 	stop()
 	subscribe(string) <-chan Message

@@ -14,12 +14,14 @@ type Noder interface {
 	Port() string
 }
 
-type Observer interface {
-	Observe() (chan []Noder, error)
-	AddNode(*Node) error
-	RemoveNode(*Node) error
+type NodeMapper interface {
+	Node(string) (Node, bool)
+	Nodes() map[string]Node
+	Update(...Node)
+	Add(Node)
+	Remove(string)
+	Length() int
 }
-
 type nodeRegistry struct {
 	observeChannel <-chan []Noder
 	newChannel     chan Node

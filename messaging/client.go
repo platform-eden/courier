@@ -7,6 +7,26 @@ import (
 	"sync"
 )
 
+type ResponseMapper interface {
+	Push(ResponseInfo)
+	Pop(string) (string, error)
+	Length() int
+}
+
+type SubMapper interface {
+	Add(string, ...string)
+	Remove(string, ...string)
+	Subscribers(string) ([]string, error)
+	CheckForSubscriber(subject string, id string) bool
+}
+
+type ClientNodeMapper interface {
+	Node(string) (clientNode, bool)
+	Add(clientNode)
+	Remove(string)
+	Length() int
+}
+
 type Sender interface {
 	sendMessage(context.Context, Message) error
 	Receiver() Node

@@ -129,14 +129,12 @@ func TestNewMessagingService(t *testing.T) {
 
 func TestMessagingService_Stop(t *testing.T) {
 	type test struct {
-		port     string
-		observer Observer
+		port string
 	}
 
 	tests := []test{
 		{
-			port:     "3000",
-			observer: newMockObserver(make(chan []Noder), false),
+			port: "3000",
 		},
 	}
 
