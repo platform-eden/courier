@@ -28,7 +28,7 @@ func getMageDir() string {
 
 // updates grpc boilerplate
 func Proto() error {
-	protopath := filepath.Join(baseDir, "protobuf_files")
+	protopath := filepath.Join(baseDir, "proto")
 	// get files in proto path
 	files, err := ioutil.ReadDir(protopath)
 	if err != nil {
@@ -58,7 +58,7 @@ func Proto() error {
 func Race() error {
 	os.Chdir(baseDir)
 
-	err := sh.Run("go", "test", "-race", "-covermode=atomic", "-coverprofile=coverage.out", "./...")
+	err := sh.Run("go", "test", "-race", "-covermode=atomic", "-coverprofile=coverage.out", "./pkg/...")
 	if err != nil {
 		return fmt.Errorf("failed unit test: %s", err)
 	}

@@ -1,0 +1,47 @@
+syntax = "proto3";
+package messaging;
+
+option go_package = "/pkg/messaging/proto";
+
+message PublishMessage {
+    string id = 1;
+    string subject = 2;
+    bytes content = 3; 
+}
+
+message RequestMessage {
+    string id = 1;
+    string nodeId = 2;
+    string subject = 3;
+    bytes content = 4; 
+}
+
+message ResponseMessage {
+    string id = 1;
+    string subject = 2;
+    bytes content = 3; 
+}
+
+message PublishMessageRequest {
+    PublishMessage message = 1;
+}
+
+message RequestMessageRequest {
+    RequestMessage message = 1;
+}
+
+message ResponseMessageRequest {
+    ResponseMessage message = 1;
+}
+
+
+// in case returns are actually needed in the future
+message PublishMessageResponse{}
+message RequestMessageResponse{}
+message ResponseMessageResponse{}
+
+service Message {
+    rpc PublishMessage (PublishMessageRequest) returns (PublishMessageResponse){}
+    rpc RequestMessage (RequestMessageRequest) returns (RequestMessageResponse){}
+    rpc ResponseMessage (ResponseMessageRequest) returns (ResponseMessageResponse){}
+}
