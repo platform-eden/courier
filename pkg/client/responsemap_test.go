@@ -1,27 +1,26 @@
 package client
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/platform-edn/courier/pkg/messaging"
 )
 
-func TestUnregisteredResponseError_Error(t *testing.T) {
-	method := "testMethod"
-	messageId := "test"
-	e := &UnregisteredResponseError{
-		Method:    method,
-		MessageId: messageId,
-	}
+// func TestUnregisteredResponseError_Error(t *testing.T) {
+// 	method := "testMethod"
+// 	messageId := "test"
+// 	e := &UnregisteredResponseError{
+// 		Method:    method,
+// 		MessageId: messageId,
+// 	}
 
-	message := e.Error()
+// 	message := e.Error()
 
-	if message != fmt.Sprintf("%s: no response exists with id %s", method, messageId) {
-		t.Fatalf("expected error message to be %s but got %s", fmt.Sprintf("%s: no response exists with id %s", method, messageId), message)
-	}
-}
+// 	if message != fmt.Sprintf("%s: no response exists with id %s", method, messageId) {
+// 		t.Fatalf("expected error message to be %s but got %s", fmt.Sprintf("%s: no response exists with id %s", method, messageId), message)
+// 	}
+// }
 
 func TestResponseMap_PushResponse(t *testing.T) {
 	responses := newResponseMap()

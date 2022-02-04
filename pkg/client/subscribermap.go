@@ -1,6 +1,7 @@
 package client
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/platform-edn/courier/pkg/lock"
@@ -57,13 +58,30 @@ func (s *subscriberMap) Subscribers(subject string) ([]string, error) {
 
 	ids, ok := s.subjectSubscribers[subject]
 	if !ok {
-		return nil, &UnregisteredSubscriberError{
-			Method:  "Subscribers",
+		return nil, fmt.Errorf("Subscribers: %w", &UnregisteredSubjectError{
 			Subject: subject,
-		}
+		})
 	}
 
 	return ids, nil
+}
+
+func (s *subscriberMap) GenerateIdsBySubject(subject string) (<-chan string, error) {
+	out := make(chan string)
+
+	ids, err := s.Subscribers(subject)
+	if err != nil {
+		return nil, fmt.Errorf("GenerateIdsBySubject: %w", err)
+	}
+
+	go func() {
+		for _, id := range ids {
+			out <- id
+		}
+		close(out)
+	}()
+
+	return out, nil
 }
 
 // CheckForSubscriber sees if a node id exists in a subject.  Returns true if it exists.

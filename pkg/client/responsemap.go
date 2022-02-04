@@ -1,6 +1,8 @@
 package client
 
 import (
+	"fmt"
+
 	"github.com/platform-edn/courier/pkg/lock"
 	"github.com/platform-edn/courier/pkg/messaging"
 )
@@ -32,15 +34,29 @@ func (r *responseMap) PopResponse(messageId string) (string, error) {
 
 	nodeId, ok := r.responses[messageId]
 	if !ok {
-		return "", &UnregisteredResponseError{
-			Method:    "Pop",
+		return "", fmt.Errorf("PopResponse: %w", &UnregisteredResponseError{
 			MessageId: messageId,
-		}
+		})
 	}
 
 	delete(r.responses, messageId)
 
 	return nodeId, nil
+}
+
+// generateIdsByMessage takes a messageId and returns a channel of node ids expecting to receive a response
+func (r *responseMap) GenerateIdsByMessage(messageId string) (<-chan string, error) {
+	out := make(chan string, 1)
+
+	id, err := r.PopResponse(messageId)
+	if err != nil {
+		return nil, fmt.Errorf("GenerateIdsByMessage: %w", err)
+	}
+
+	out <- id
+	close(out)
+
+	return out, nil
 }
 
 func (r *responseMap) Length() int {

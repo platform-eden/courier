@@ -10,6 +10,7 @@ import (
 	"github.com/platform-edn/courier/pkg/messaging/proto"
 	"github.com/platform-edn/courier/pkg/registry"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type clientNode struct {
@@ -22,14 +23,7 @@ type ClientNodeOptions struct {
 	options []grpc.DialOption
 }
 
-// CLientNodeOption is a set of options that may be passed as parameters when creating a ClientNode
 type ClientNodeOption func(c *ClientNodeOptions) *ClientNodeOptions
-
-func NewClientNodeOptions() *ClientNodeOptions {
-	return &ClientNodeOptions{
-		options: []grpc.DialOption{},
-	}
-}
 
 type ClientRetryOptionsInput struct {
 	maxAttempts     uint
@@ -55,7 +49,7 @@ func WithClientRetryOptions(input ClientRetryOptionsInput) ClientNodeOption {
 // WithDialOption sets the dial options for gRPC connections in the client
 func WithInsecure() ClientNodeOption {
 	return func(c *ClientNodeOptions) *ClientNodeOptions {
-		c.options = append(c.options, grpc.WithInsecure())
+		c.options = append(c.options, grpc.WithTransportCredentials(insecure.NewCredentials()))
 
 		return c
 	}
@@ -71,59 +65,26 @@ func WithDialOptions(option ...grpc.DialOption) ClientNodeOption {
 }
 
 func newClientNode(node registry.Node, currrentId string, optionFuncs ...ClientNodeOption) (*clientNode, error) {
-	clientOptions := NewClientNodeOptions()
+	clientOptions := &ClientNodeOptions{}
 	for _, addOption := range optionFuncs {
 		clientOptions = addOption(clientOptions)
 	}
 
 	conn, err := grpc.Dial(fmt.Sprintf("%s:%s", node.Address, node.Port), clientOptions.options...)
 	if err != nil {
-		return nil, &ClientNodeDialError{
-			Method:   "newClientNode",
-			Err:      err,
-			Port:     node.Port,
-			Hostname: node.Address,
-		}
+		return nil, fmt.Errorf("NewClientNode: %w", err)
 	}
 
-	n := clientNode{
+	n := &clientNode{
 		Node:       node,
 		connection: conn,
 		currentId:  currrentId,
 	}
 
-	return &n, nil
+	return n, nil
 }
 
-func (c *clientNode) sendMessage(ctx context.Context, m messaging.Message) error {
-	var err error
-	switch m.Type {
-	case messaging.PubMessage:
-		err = c.sendPublishMessage(ctx, m)
-	case messaging.ReqMessage:
-		err = c.sendRequestMessage(ctx, m)
-	case messaging.RespMessage:
-		err = c.sendResponseMessage(ctx, m)
-	}
-
-	if err != nil {
-		return &ClientNodeSendError{
-			Err:    err,
-			Method: "sendMessage",
-		}
-	}
-
-	return nil
-}
-
-func (c *clientNode) sendPublishMessage(ctx context.Context, m messaging.Message) error {
-	if m.Type != messaging.PubMessage {
-		return &ClientNodeMessageTypeError{
-			Type:   messaging.PubMessage.String(),
-			Method: "sendRequestMessage",
-		}
-	}
-
+func (c *clientNode) SendPublishMessage(ctx context.Context, m messaging.Message, failedNodes chan registry.Node) {
 	_, err := proto.NewMessageClient(c.connection).PublishMessage(ctx, &proto.PublishMessageRequest{
 		Message: &proto.PublishMessage{
 			Id:      m.Id,
@@ -132,23 +93,13 @@ func (c *clientNode) sendPublishMessage(ctx context.Context, m messaging.Message
 		},
 	})
 	if err != nil {
-		return &ClientNodeSendError{
-			Err:    err,
-			Method: "sendPublishMessage",
+		if err != nil {
+			failedNodes <- c.Node
 		}
 	}
-
-	return nil
 }
 
-func (c *clientNode) sendRequestMessage(ctx context.Context, m messaging.Message) error {
-	if m.Type != messaging.ReqMessage {
-		return &ClientNodeMessageTypeError{
-			Type:   messaging.ReqMessage.String(),
-			Method: "sendRequestMessage",
-		}
-	}
-
+func (c *clientNode) SendRequestMessage(ctx context.Context, m messaging.Message, failedNodes chan registry.Node) {
 	_, err := proto.NewMessageClient(c.connection).RequestMessage(ctx, &proto.RequestMessageRequest{
 		Message: &proto.RequestMessage{
 			Id:      m.Id,
@@ -158,23 +109,13 @@ func (c *clientNode) sendRequestMessage(ctx context.Context, m messaging.Message
 		},
 	})
 	if err != nil {
-		return &ClientNodeSendError{
-			Err:    err,
-			Method: "sendRequestMessage",
+		if err != nil {
+			failedNodes <- c.Node
 		}
 	}
-
-	return nil
 }
 
-func (c *clientNode) sendResponseMessage(ctx context.Context, m messaging.Message) error {
-	if m.Type != messaging.RespMessage {
-		return &ClientNodeMessageTypeError{
-			Type:   messaging.RespMessage.String(),
-			Method: "sendResponseMessage",
-		}
-	}
-
+func (c *clientNode) SendResponseMessage(ctx context.Context, m messaging.Message, failedNodes chan registry.Node) {
 	_, err := proto.NewMessageClient(c.connection).ResponseMessage(ctx, &proto.ResponseMessageRequest{
 		Message: &proto.ResponseMessage{
 			Id:      m.Id,
@@ -183,15 +124,8 @@ func (c *clientNode) sendResponseMessage(ctx context.Context, m messaging.Messag
 		},
 	})
 	if err != nil {
-		return &ClientNodeSendError{
-			Err:    err,
-			Method: "sendResponseMessage",
+		if err != nil {
+			failedNodes <- c.Node
 		}
 	}
-
-	return nil
-}
-
-func (c *clientNode) Receiver() registry.Node {
-	return c.Node
 }

@@ -11,13 +11,12 @@ func (err *MessagingClientError) Error() string {
 	return fmt.Sprintf("%s: %s", err.Method, err.Err)
 }
 
-type NodeIdGenerationError struct {
-	Method string
-	Err    error
+type UnregisteredSubjectError struct {
+	Subject string
 }
 
-func (err *NodeIdGenerationError) Error() string {
-	return fmt.Sprintf("%s: %s", err.Method, err.Err)
+func (err *UnregisteredSubjectError) Error() string {
+	return fmt.Sprintf("nodes does not have subject %s registered", err.Subject)
 }
 
 type UnregisteredSubscriberError struct {
@@ -39,12 +38,11 @@ func (err *UnknownNodeEventError) Error() string {
 }
 
 type UnregisteredResponseError struct {
-	Method    string
 	MessageId string
 }
 
 func (err *UnregisteredResponseError) Error() string {
-	return fmt.Sprintf("%s: no response exists with id %s", err.Method, err.MessageId)
+	return fmt.Sprintf("no response exists with id %s", err.MessageId)
 }
 
 type ContextDoneUnsentMessageError struct {
@@ -82,4 +80,13 @@ type ClientNodeMessageTypeError struct {
 
 func (err *ClientNodeMessageTypeError) Error() string {
 	return fmt.Sprintf("%s: message must be of type %s", err.Method, err.Type)
+}
+
+type BadMessageTypeError struct {
+	Expected string
+	Actual   string
+}
+
+func (err *BadMessageTypeError) Error() string {
+	return fmt.Sprintf("bad message type: expected %s but got %s", err.Expected, err.Actual)
 }

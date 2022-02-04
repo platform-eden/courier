@@ -12,7 +12,7 @@ import (
 
 type ResponseMapper interface {
 	PushResponse(messaging.ResponseInfo)
-	PopResponse(string) (string, error)
+	GenerateIdsByMessage(string) (<-chan string, error)
 	Length() int
 }
 
@@ -20,7 +20,7 @@ type SubMapper interface {
 	AddSubscriber(string, ...string)
 	RemoveSubscriber(string, ...string)
 	Subscribers(string) ([]string, error)
-	CheckForSubscriber(subject string, id string) bool
+	GenerateIdsBySubject(string) (<-chan string, error)
 }
 
 type ClientNodeMapper interface {
@@ -28,13 +28,8 @@ type ClientNodeMapper interface {
 	AddClientNode(clientNode)
 	RemoveClientNode(string)
 	Length() int
+	GenerateClientNodes(in <-chan string) <-chan clientNode
 }
-
-type Sender interface {
-	sendMessage(context.Context, messaging.Message) error
-	Receiver() registry.Node
-}
-
 type messagingClient struct {
 	ClientNodeMapper
 	SubMapper
@@ -97,17 +92,20 @@ func (client *messagingClient) ListenForNodeEvents(ctx context.Context, wg *sync
 }
 
 func (c *messagingClient) Publish(ctx context.Context, msg messaging.Message) error {
-	ids, err := generateIdsBySubject(msg.Subject, c.SubMapper)
-	if err != nil {
-		return &MessagingClientError{
-			Method: "Publish",
-			Err:    err,
-		}
+	if msg.Type != messaging.PubMessage {
+		return fmt.Errorf("Publish: %w", &BadMessageTypeError{
+			Expected: messaging.PubMessage.String(),
+			Actual:   msg.Type.String(),
+		})
 	}
 
-	cnodes := idToClientNodes(ids, c.ClientNodeMapper)
-	failed := fanMessageAttempts(cnodes, ctx, msg)
-	done := forwardFailedConnections(failed, c.ClientNodeMapper, c.SubMapper, c.failedEvents)
+	ids, err := c.GenerateIdsBySubject(msg.Subject)
+	if err != nil {
+		return fmt.Errorf("Publish: %w", err)
+	}
+	nodes := c.GenerateClientNodes(ids)
+	failed := c.fanMessageAttempts(ctx, nodes, msg)
+	done := c.forwardFailedConnections(failed)
 
 	select {
 	case <-done:
@@ -122,17 +120,20 @@ func (c *messagingClient) Publish(ctx context.Context, msg messaging.Message) er
 }
 
 func (c *messagingClient) Response(ctx context.Context, msg messaging.Message) error {
-	ids, err := generateIdsByMessage(msg.Id, c.ResponseMapper)
-	if err != nil {
-		return &MessagingClientError{
-			Method: "Response",
-			Err:    err,
-		}
+	if msg.Type != messaging.RespMessage {
+		return fmt.Errorf("Response: %w", &BadMessageTypeError{
+			Expected: messaging.RespMessage.String(),
+			Actual:   msg.Type.String(),
+		})
 	}
 
-	cnodes := idToClientNodes(ids, c.ClientNodeMapper)
-	failed := fanMessageAttempts(cnodes, ctx, msg)
-	done := forwardFailedConnections(failed, c.ClientNodeMapper, c.SubMapper, c.failedEvents)
+	ids, err := c.GenerateIdsByMessage(msg.Id)
+	if err != nil {
+		return fmt.Errorf("Response: %w", err)
+	}
+	nodes := c.GenerateClientNodes(ids)
+	failed := c.fanMessageAttempts(ctx, nodes, msg)
+	done := c.forwardFailedConnections(failed)
 
 	select {
 	case <-done:
@@ -147,23 +148,26 @@ func (c *messagingClient) Response(ctx context.Context, msg messaging.Message) e
 }
 
 func (c *messagingClient) Request(ctx context.Context, msg messaging.Message) error {
-	ids, err := generateIdsBySubject(msg.Subject, c.SubMapper)
-	if err != nil {
-		return &MessagingClientError{
-			Method: "Request",
-			Err:    err,
-		}
+	if msg.Type != messaging.ReqMessage {
+		return fmt.Errorf("Request: %w", &BadMessageTypeError{
+			Expected: messaging.ReqMessage.String(),
+			Actual:   msg.Type.String(),
+		})
 	}
 
-	cnodes := idToClientNodes(ids, c.ClientNodeMapper)
-	failed := fanMessageAttempts(cnodes, ctx, msg)
-	done := forwardFailedConnections(failed, c.ClientNodeMapper, c.SubMapper, c.failedEvents)
+	ids, err := c.GenerateIdsBySubject(msg.Subject)
+	if err != nil {
+		return fmt.Errorf("Request: %w", err)
+	}
+	nodes := c.GenerateClientNodes(ids)
+	failed := c.fanMessageAttempts(ctx, nodes, msg)
+	done := c.forwardFailedConnections(failed)
 
 	select {
 	case <-done:
 		break
 	case <-ctx.Done():
-		return fmt.Errorf("Publish: %w", &ContextDoneUnsentMessageError{
+		return fmt.Errorf("Request: %w", &ContextDoneUnsentMessageError{
 			MessageId: msg.Id,
 		})
 	}
@@ -171,108 +175,50 @@ func (c *messagingClient) Request(ctx context.Context, msg messaging.Message) er
 	return nil
 }
 
-// generateIdsBySubject takes a subject string and returns a channel of node ids subscribing to it
-func generateIdsBySubject(subject string, subMap SubMapper) (<-chan string, error) {
-	out := make(chan string)
-
-	ids, err := subMap.Subscribers(subject)
-	if err != nil {
-		return nil, &NodeIdGenerationError{
-			Method: "generateIdsBySubject",
-			Err:    err,
-		}
-	}
-
-	go func() {
-		for _, id := range ids {
-			out <- id
-		}
-		close(out)
-	}()
-
-	return out, nil
-}
-
-// generateIdsByMessage takes a messageId and returns a channel of node ids expecting to receive a response
-func generateIdsByMessage(messageId string, respMap ResponseMapper) (<-chan string, error) {
-	out := make(chan string, 1)
-
-	id, err := respMap.PopResponse(messageId)
-	if err != nil {
-		return nil, &NodeIdGenerationError{
-			Method: "generateIdsByMessage",
-			Err:    err,
-		}
-	}
-
-	out <- id
-	close(out)
-
-	return out, nil
-}
-
-// idToNodes takes a channel of ids and returns a channel of nodes based on the ids
-func idToClientNodes(in <-chan string, nodeMap ClientNodeMapper) <-chan Sender {
-	out := make(chan Sender)
-	go func() {
-		for id := range in {
-			n, exist := nodeMap.Node(id)
-			if !exist {
-				log.Printf("node %s does not exist in nodemap - skipping", id)
-				continue
-			}
-
-			out <- &n
-		}
-		close(out)
-	}()
-
-	return out
-}
-
 // fanMessageAttempts takes a channel of Senders and creates a goroutine for each to attempt to send a message. Returns a channel that will return nodes that unsuccessfully sent a message
-func fanMessageAttempts(in <-chan Sender, ctx context.Context, msg messaging.Message) chan registry.Node {
-	out := make(chan registry.Node)
+func (c *messagingClient) fanMessageAttempts(ctx context.Context, in <-chan clientNode, msg messaging.Message) chan registry.Node {
+	failedNodes := make(chan registry.Node)
 
 	go func() {
 		wg := &sync.WaitGroup{}
 
-		for n := range in {
+		for client := range in {
 			wg.Add(1)
-			go attemptMessage(ctx, n, msg, out, wg)
+			go func(client clientNode) {
+				defer wg.Done()
+
+				switch msg.Type {
+				case messaging.PubMessage:
+					client.SendPublishMessage(ctx, msg, failedNodes)
+				case messaging.ReqMessage:
+					client.SendRequestMessage(ctx, msg, failedNodes)
+				case messaging.RespMessage:
+					client.SendResponseMessage(ctx, msg, failedNodes)
+				}
+			}(client)
 		}
 
 		wg.Wait()
-		close(out)
+		close(failedNodes)
 	}()
 
-	return out
-}
-
-// attemptMessage takes a send function and attempts it until it succeeds or has reached maxAttempts.  Waits between attempts depends on the given interval
-func attemptMessage(ctx context.Context, sender Sender, msg messaging.Message, nchan chan registry.Node, wg *sync.WaitGroup) {
-	defer wg.Done()
-	err := sender.sendMessage(ctx, msg)
-	if err != nil {
-		nchan <- sender.Receiver()
-	}
+	return failedNodes
 }
 
 // forwardFailedConnections takes a channel of nodes and sends them through a stale channel as well as a failed connection channel.  Returns a bool channel that receives true when it's done
-func forwardFailedConnections(in <-chan registry.Node, clientNodes ClientNodeMapper, subscribers SubMapper, fchan chan registry.NodeEvent) <-chan bool {
-	out := make(chan bool)
+func (c *messagingClient) forwardFailedConnections(in <-chan registry.Node) <-chan struct{} {
+	out := make(chan struct{})
 
 	go func() {
 		for n := range in {
 			log.Printf("failed creating connection to %s:%s - will now be removing and blacklisting %s\n", n.Address, n.Port, n.Id)
-			clientNodes.RemoveClientNode(n.Id)
-			subscribers.RemoveSubscriber(n.Id, n.SubscribedSubjects...)
+			c.RemoveClientNode(n.Id)
+			c.RemoveSubscriber(n.Id, n.SubscribedSubjects...)
 
 			event := registry.NewNodeEvent(n, registry.Failed)
-			fchan <- *event
+			c.failedEvents <- *event
 
 		}
-		out <- true
 		close(out)
 	}()
 
