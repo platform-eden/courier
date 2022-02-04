@@ -23,10 +23,10 @@ func TestChannelMap_Add(t *testing.T) {
 
 	for _, tc := range tests {
 		chanMap := newChannelMap()
-		defer chanMap.Close()
+		defer chanMap.CloseSubscriberChannels()
 
 		for i := 0; i < tc.channelCount; i++ {
-			chanMap.AddSubscriber(tc.subject)
+			chanMap.SubscribeToSubject(tc.subject)
 		}
 
 		if len(chanMap.SubjectChannels[tc.subject]) != tc.channelCount {
@@ -65,10 +65,10 @@ func TestChannelMap_Subscriptions(t *testing.T) {
 
 	for _, tc := range tests {
 		chanMap := newChannelMap()
-		defer chanMap.Close()
+		defer chanMap.CloseSubscriberChannels()
 
 		for i := 0; i < tc.channelCount; i++ {
-			chanMap.AddSubscriber(tc.addSubject)
+			chanMap.SubscribeToSubject(tc.addSubject)
 		}
 
 		channels, err := chanMap.Subscriptions(tc.subscriptionSubject)

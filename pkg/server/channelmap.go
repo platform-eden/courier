@@ -1,6 +1,8 @@
 package server
 
 import (
+	"fmt"
+
 	"github.com/platform-edn/courier/pkg/lock"
 	"github.com/platform-edn/courier/pkg/messaging"
 )
@@ -19,7 +21,7 @@ func newChannelMap() *ChannelMap {
 	return &c
 }
 
-func (c *ChannelMap) AddSubscriber(subject string) <-chan messaging.Message {
+func (c *ChannelMap) SubscribeToSubject(subject string) <-chan messaging.Message {
 	c.Lock.Lock()
 	defer c.Lock.Unlock()
 
@@ -35,16 +37,34 @@ func (c *ChannelMap) Subscriptions(subject string) ([]chan messaging.Message, er
 
 	channels, exist := c.SubjectChannels[subject]
 	if !exist {
-		return nil, &UnregisteredChannelSubjectError{
-			Method:  "ChannelMap.Subscriptions",
+		return nil, fmt.Errorf("Subscriptions: %w", &UnregisteredChannelSubjectError{
 			Subject: subject,
-		}
+		})
 	}
 
 	return channels, nil
 }
 
-func (c *ChannelMap) Close() {
+func (c *ChannelMap) GenerateMessageChannels(subject string) (<-chan chan messaging.Message, error) {
+	out := make(chan chan messaging.Message)
+
+	channels, err := c.Subscriptions(subject)
+	if err != nil {
+		return nil, fmt.Errorf("GenerateMessageChannels: %w", err)
+	}
+
+	go func() {
+		for _, channel := range channels {
+			out <- channel
+		}
+
+		close(out)
+	}()
+
+	return out, nil
+}
+
+func (c *ChannelMap) CloseSubscriberChannels() {
 	c.Lock.Lock()
 	defer c.Lock.Unlock()
 
