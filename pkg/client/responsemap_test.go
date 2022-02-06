@@ -1,10 +1,12 @@
-package client
+package client_test
 
 import (
 	"testing"
+	"time"
 
-	"github.com/google/uuid"
+	"github.com/platform-edn/courier/pkg/client"
 	"github.com/platform-edn/courier/pkg/messaging"
+	"github.com/stretchr/testify/assert"
 )
 
 // func TestUnregisteredResponseError_Error(t *testing.T) {
@@ -23,74 +25,132 @@ import (
 // }
 
 func TestResponseMap_PushResponse(t *testing.T) {
-	responses := newResponseMap()
-	info := messaging.ResponseInfo{
-		MessageId: "10",
-		NodeId:    "node",
+	tests := map[string]struct {
+		responseInfo messaging.ResponseInfo
+	}{
+		"adds a pair where the key is the messageId": {
+			responseInfo: messaging.ResponseInfo{
+				MessageId: "message",
+				NodeId:    "node",
+			},
+		},
 	}
 
-	responses.PushResponse(info)
-	id, ok := responses.responses[info.MessageId]
-	if !ok {
-		t.Fatal("expected response to be added but it wasn't")
-	}
-	if id != info.NodeId {
-		t.Fatalf("expected response id to be %s but got %s", info.NodeId, id)
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			respMap := client.NewResponseMap()
+
+			respMap.PushResponse(test.responseInfo)
+
+			assert.Contains(respMap.Responses, test.responseInfo.MessageId)
+			assert.Equal(respMap.Responses[test.responseInfo.MessageId], test.responseInfo.NodeId)
+		})
 	}
 }
 
 func TestResponseMap_PopResponse(t *testing.T) {
-	responses := newResponseMap()
-
-	info := messaging.ResponseInfo{
-		MessageId: "10",
-		NodeId:    "node",
-	}
-
-	responses.PushResponse(info)
-	id, err := responses.PopResponse(info.MessageId)
-	if err != nil {
-		t.Fatalf("error popping response: %s", err)
-	}
-	if id != info.NodeId {
-		t.Fatalf("expected response id to be %s but got %s", info.NodeId, id)
-	}
-
-	_, err = responses.PopResponse(info.MessageId)
-	if err == nil {
-		t.Fatalf("expected popping a nonexistant response to return an err but it passed")
-	}
-
-}
-
-/**************************************************************
-Expected Outcomes:
-- should return how many responseInfo structs are in the map
-**************************************************************/
-func TestResponseMap_Length(t *testing.T) {
-	type test struct {
-		count int
-	}
-
-	tests := []test{
-		{
-			count: 10,
+	tests := map[string]struct {
+		responseInfo messaging.ResponseInfo
+		popId        string
+		err          error
+	}{
+		"pops a response from the map": {
+			responseInfo: messaging.ResponseInfo{
+				MessageId: "message",
+				NodeId:    "node",
+			},
+			popId: "message",
+			err:   nil,
+		},
+		"fails when popping a message that isn't registered": {
+			responseInfo: messaging.ResponseInfo{
+				MessageId: "message",
+				NodeId:    "node",
+			},
+			popId: "bad",
+			err:   &client.UnregisteredResponseError{},
 		},
 	}
 
-	for _, tc := range tests {
-		respMap := newResponseMap()
-		for i := 0; i < tc.count; i++ {
-			info := messaging.ResponseInfo{
-				NodeId:    uuid.NewString(),
-				MessageId: uuid.NewString(),
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			respMap := client.NewResponseMap()
+
+			respMap.PushResponse(test.responseInfo)
+			id, err := respMap.PopResponse(test.popId)
+			if test.err != nil {
+				errorType := test.err
+				assert.Error(err)
+				assert.ErrorAs(err, &errorType)
+				return
 			}
 
-			respMap.PushResponse(info)
-		}
+			assert.NoError(err)
+			assert.Equal(id, test.responseInfo.NodeId)
+			assert.Zero(len(respMap.Responses))
+		})
+	}
+}
 
-		if respMap.Length() != tc.count {
-			t.Fatalf("expected response count to be %v but got %v", tc.count, respMap.Length())
-		}
+func TestResponseMap_GenerateIdsByMessage(t *testing.T) {
+	tests := map[string]struct {
+		responseInfo messaging.ResponseInfo
+		id           string
+		err          error
+	}{
+		"pops a response from the map": {
+			responseInfo: messaging.ResponseInfo{
+				MessageId: "message1",
+				NodeId:    "node",
+			},
+			id:  "message1",
+			err: nil,
+		},
+		"fails when popping a message that isn't registered": {
+			responseInfo: messaging.ResponseInfo{
+				MessageId: "message1",
+				NodeId:    "node",
+			},
+			id:  "bad1",
+			err: &client.UnregisteredResponseError{},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			respMap := client.NewResponseMap()
+
+			respMap.PushResponse(test.responseInfo)
+
+			out, err := respMap.GenerateIdsByMessage(test.id)
+			if test.err != nil {
+				errorType := test.err
+				assert.ErrorAs(err, &errorType)
+				return
+			}
+
+			assert.NoError(err)
+
+			done := make(chan struct{})
+			go func() {
+				respOut := []string{}
+				for s := range out {
+					respOut = append(respOut, s)
+				}
+
+				assert.Len(respOut, 1)
+				assert.EqualValues(respOut[0], test.responseInfo.NodeId)
+				close(done)
+			}()
+
+			select {
+			case <-done:
+			case <-time.After(time.Second * 3):
+				t.Fatal("did not close done channel in time")
+			}
+		})
 	}
 }

@@ -1,59 +1,74 @@
 package client
 
 import (
+	"context"
+	"fmt"
 	"log"
+	"sync"
 
 	"github.com/platform-edn/courier/pkg/lock"
+	"github.com/platform-edn/courier/pkg/messaging"
+	"github.com/platform-edn/courier/pkg/registry"
 )
 
-type clientNodeMap struct {
-	nodes map[string]clientNode
-	lock  lock.Locker
+type Messager interface {
+	AttemptMessage(ctx context.Context, msg messaging.Message) error
+	Subscriber() registry.Node
 }
 
-func newClientNodeMap() *clientNodeMap {
+type clientNodeMap struct {
+	Nodes map[string]ClientNode
+	lock.Locker
+}
+
+func NewClientNodeMap() *clientNodeMap {
 	nm := clientNodeMap{
-		nodes: map[string]clientNode{},
-		lock:  lock.NewTicketLock(),
+		Nodes:  map[string]ClientNode{},
+		Locker: lock.NewTicketLock(),
 	}
 
 	return &nm
 }
 
-func (nm *clientNodeMap) Node(id string) (clientNode, bool) {
-	nm.lock.Lock()
-	defer nm.lock.Unlock()
+func (nm *clientNodeMap) Node(id string) (*ClientNode, error) {
+	nm.Lock()
+	defer nm.Unlock()
 
-	n, exist := nm.nodes[id]
+	node, exist := nm.Nodes[id]
+	if !exist {
+		return nil, fmt.Errorf("Node: %w", &UnregisteredClientNodeError{
+			Id: id,
+		})
+	}
 
-	return n, exist
+	return &node, nil
 }
 
-func (nm *clientNodeMap) AddClientNode(n clientNode) {
-	nm.lock.Lock()
-	defer nm.lock.Unlock()
+func (nm *clientNodeMap) AddClientNode(n ClientNode) {
+	nm.Lock()
+	defer nm.Unlock()
 
-	nm.nodes[n.Id] = n
+	nm.Nodes[n.Id] = n
 }
 
 func (nm *clientNodeMap) RemoveClientNode(id string) {
-	nm.lock.Lock()
-	defer nm.lock.Unlock()
+	nm.Lock()
+	defer nm.Unlock()
 
-	delete(nm.nodes, id)
+	delete(nm.Nodes, id)
 }
 
-func (nm *clientNodeMap) GenerateClientNodes(in <-chan string) <-chan clientNode {
-	out := make(chan clientNode)
+func (nm *clientNodeMap) GenerateClientNodes(in <-chan string) <-chan *ClientNode {
+	out := make(chan *ClientNode)
 	go func() {
 		for id := range in {
-			n, exist := nm.Node(id)
-			if !exist {
-				log.Printf("node %s does not exist in nodemap - skipping", id)
+			node, err := nm.Node(id)
+			if err != nil {
+				log.Printf("GenerateClientNodes: %w", err)
 				continue
 			}
 
-			out <- n
+			out <- node
 		}
 		close(out)
 	}()
@@ -61,9 +76,29 @@ func (nm *clientNodeMap) GenerateClientNodes(in <-chan string) <-chan clientNode
 	return out
 }
 
-func (nm *clientNodeMap) Length() int {
-	nm.lock.Lock()
-	defer nm.lock.Unlock()
+func (nm *clientNodeMap) FanClientNodeMessaging(ctx context.Context, msg messaging.Message, ids <-chan string) <-chan registry.Node {
+	failedNodes := make(chan registry.Node)
+	messagers := nm.GenerateClientNodes(ids)
 
-	return len(nm.nodes)
+	go func() {
+		wg := &sync.WaitGroup{}
+
+		for messager := range messagers {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+
+				err := messager.AttemptMessage(ctx, msg)
+				if err != nil {
+					log.Printf("GenerateClientNodes: %w", err)
+					failedNodes <- messager.Subscriber()
+				}
+			}()
+		}
+
+		wg.Wait()
+		close(failedNodes)
+	}()
+
+	return failedNodes
 }

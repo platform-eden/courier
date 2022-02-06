@@ -8,38 +8,38 @@ import (
 )
 
 type responseMap struct {
-	responses map[string]string
-	lock      *lock.TicketLock
+	Responses map[string]string
+	lock.Locker
 }
 
-func newResponseMap() *responseMap {
+func NewResponseMap() *responseMap {
 	r := responseMap{
-		responses: make(map[string]string),
-		lock:      lock.NewTicketLock(),
+		Responses: make(map[string]string),
+		Locker:    lock.NewTicketLock(),
 	}
 
 	return &r
 }
 
 func (r *responseMap) PushResponse(info messaging.ResponseInfo) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
+	r.Lock()
+	defer r.Unlock()
 
-	r.responses[info.MessageId] = info.NodeId
+	r.Responses[info.MessageId] = info.NodeId
 }
 
 func (r *responseMap) PopResponse(messageId string) (string, error) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
+	r.Lock()
+	defer r.Unlock()
 
-	nodeId, ok := r.responses[messageId]
+	nodeId, ok := r.Responses[messageId]
 	if !ok {
 		return "", fmt.Errorf("PopResponse: %w", &UnregisteredResponseError{
 			MessageId: messageId,
 		})
 	}
 
-	delete(r.responses, messageId)
+	delete(r.Responses, messageId)
 
 	return nodeId, nil
 }
@@ -57,11 +57,4 @@ func (r *responseMap) GenerateIdsByMessage(messageId string) (<-chan string, err
 	close(out)
 
 	return out, nil
-}
-
-func (r *responseMap) Length() int {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
-	return len(r.responses)
 }

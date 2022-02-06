@@ -1,50 +1,4 @@
-package client
-
-// import (
-// 	"context"
-// 	"fmt"
-// 	"sync"
-// 	"testing"
-// 	"time"
-
-// 	"github.com/google/uuid"
-// 	"github.com/platform-edn/courier/pkg/registry"
-// 	"google.golang.org/grpc"
-// )
-
-// func TestNodeIdGenerationError_Error(t *testing.T) {
-// 	method := "testMethod"
-// 	err := fmt.Errorf("test error")
-// 	e := &NodeIdGenerationError{
-// 		Method: method,
-// 		Err:    err,
-// 	}
-
-// 	message := e.Error()
-
-// 	if message != fmt.Sprintf("%s: %s", method, err) {
-// 		t.Fatalf("expected error message to be %s but got %s", fmt.Sprintf("%s: %s", method, err), message)
-// 	}
-// }
-
-// func TestMessagingClient_Stop(t *testing.T) {
-// 	fchan := make(chan registry.Node)
-// 	schan := make(chan registry.Node)
-// 	nchan := make(chan registry.Node)
-// 	rchan := make(chan ResponseInfo)
-
-// 	client := newMessagingClient(&messageClientOptions{
-// 		failedChannel:   fchan,
-// 		staleChannel:    schan,
-// 		nodeChannel:     nchan,
-// 		responseChannel: rchan,
-// 		currentId:       "testId",
-// 		clientOptions:   []ClientNodeOption{},
-// 		startClient:     true,
-// 	})
-
-// 	client.stop()
-// }
+package client_test
 
 // func TestMessagingClient_Publish(t *testing.T) {
 // 	type test struct {
@@ -145,6 +99,20 @@ package client
 // 		client.stop()
 // 		close(errchan)
 // 	}
+// }
+
+// func TestMessagingClient_Publish(t *testing.T) {
+// 	tests := map[string]struct{}{}
+
+// 	for name, test := range tests {
+// 		t.Run(name, func(t *testing.T) {
+// 			failChannel := make(chan registry.NodeEvent)
+// 			mockCNM := make(mocks.ClientNodeMapper)
+// 			msgClient := NewMessagingClient(failChannel)
+// 			msgClient.ClientNodeMapper = mockCNM
+// 			mockCN := make()
+
+// 	})
 // }
 
 // func TestMessagingClient_Request(t *testing.T) {
@@ -669,171 +637,6 @@ package client
 // 		close(schan)
 // 		close(rchan)
 // 		close(nchan)
-// 	}
-// }
-
-// func TestGenerateIdsBySubject(t *testing.T) {
-// 	type test struct {
-// 		expectedFailure bool
-// 		nodeCount       int
-// 	}
-
-// 	tests := []test{
-// 		{
-// 			expectedFailure: false,
-// 			nodeCount:       10,
-// 		},
-// 		{
-// 			expectedFailure: true,
-// 			nodeCount:       10,
-// 		},
-// 	}
-
-// 	for _, tc := range tests {
-// 		subMap := newSubscriberMap()
-// 		subject := "test"
-// 		for i := 0; i < tc.nodeCount; i++ {
-// 			id := uuid.NewString()
-// 			subMap.Add(id, subject)
-// 		}
-
-// 		if tc.expectedFailure {
-// 			_, err := generateIdsBySubject("fail", subMap)
-// 			if err != nil {
-// 				break
-// 			} else {
-// 				t.Fatal("expected generateIdsBySubject to fail but it didn't")
-// 			}
-// 		}
-
-// 		out, err := generateIdsBySubject(subject, subMap)
-// 		if err != nil {
-// 			t.Fatalf("expected generateIdsBySubject to pass but it failed: %s", err)
-// 		}
-
-// 		count := 0
-// 		for range out {
-// 			count++
-// 		}
-
-// 		if count != tc.nodeCount {
-// 			t.Fatalf("expected out count to be %v but got %v", tc.nodeCount, count)
-// 		}
-// 	}
-// }
-
-// func TestGenerateIdsByMessage(t *testing.T) {
-// 	type test struct {
-// 		messageCount    int
-// 		expectedFailure bool
-// 	}
-
-// 	tests := []test{
-// 		{
-// 			messageCount:    1,
-// 			expectedFailure: false,
-// 		},
-// 		{
-// 			messageCount:    1,
-// 			expectedFailure: true,
-// 		},
-// 	}
-
-// 	for _, tc := range tests {
-// 		respMap := newResponseMap()
-// 		messages := []string{}
-
-// 		for i := 0; i < tc.messageCount; i++ {
-// 			info := ResponseInfo{
-// 				MessageId: uuid.NewString(),
-// 				NodeId:    uuid.NewString(),
-// 			}
-
-// 			messages = append(messages, info.MessageId)
-// 			respMap.Push(info)
-// 		}
-
-// 		var out <-chan string
-// 		var err error
-// 		if tc.expectedFailure {
-// 			out, err = generateIdsByMessage(uuid.NewString(), respMap)
-// 		} else {
-// 			out, err = generateIdsByMessage(messages[0], respMap)
-// 		}
-
-// 		if err != nil && !tc.expectedFailure {
-// 			t.Fatalf("expected to pass but it failed: %s", err)
-// 		}
-
-// 		if tc.expectedFailure {
-// 			break
-// 		}
-
-// 		count := 0
-// 		for range out {
-// 			count++
-// 		}
-
-// 		if count != 1 {
-// 			t.Fatalf("expected count to equal 1 but got %v", count)
-// 		}
-
-// 	}
-// }
-
-// func TestIdToClientNodes(t *testing.T) {
-// 	type test struct {
-// 		nodeCount    int
-// 		invalidCount int
-// 	}
-
-// 	tests := []test{
-// 		{
-// 			nodeCount:    10,
-// 			invalidCount: 5,
-// 		},
-// 		{
-// 			nodeCount:    100,
-// 			invalidCount: 50,
-// 		},
-// 	}
-
-// 	for _, tc := range tests {
-// 		nodes := CreateTestNodes(tc.nodeCount, &TestNodeOptions{})
-// 		nodeMap := newClientNodeMap()
-// 		in := make(chan string)
-// 		ids := []string{}
-// 		for _, n := range nodes {
-// 			cn, err := newClientNode(*n, uuid.NewString(), WithDialOptions(grpc.WithInsecure()))
-// 			if err != nil {
-// 				t.Fatalf("could not create clientNode: %s", err)
-// 			}
-// 			nodeMap.Add(*cn)
-// 			ids = append(ids, n.id)
-// 		}
-
-// 		for i := 0; i < tc.invalidCount; i++ {
-// 			ids = append(ids, uuid.NewString())
-// 		}
-
-// 		out := idToClientNodes(in, nodeMap)
-
-// 		go func() {
-// 			for _, id := range ids {
-// 				in <- id
-// 			}
-// 			close(in)
-// 		}()
-
-// 		count := 0
-// 		for range out {
-// 			count++
-// 		}
-
-// 		if count != tc.nodeCount {
-// 			t.Fatalf("expected %v nodes to be output but got %v instead", tc.nodeCount, count)
-// 		}
-
 // 	}
 // }
 

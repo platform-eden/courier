@@ -41,6 +41,7 @@ func RemovePointers(nodes []*Node) []Node {
 type TestNodeOptions struct {
 	SubscribedSubjects  []string
 	BroadcastedSubjects []string
+	Id                  string
 }
 
 // CreateTestNodes creates a quantity of randomized nodes based on the options passed in
@@ -76,7 +77,13 @@ func CreateTestNodes(count int, options *TestNodeOptions) []*Node {
 			broads = append(broads, broadSubjects[i])
 		}
 
-		n := NewNode(uuid.NewString(), ip, port, subs, broads)
+		var id string
+		if options.Id != "" {
+			id = options.Id
+		} else {
+			id = uuid.NewString()
+		}
+		n := NewNode(id, ip, port, subs, broads)
 		nodes = append(nodes, n)
 	}
 

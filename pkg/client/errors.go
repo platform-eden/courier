@@ -90,3 +90,11 @@ type BadMessageTypeError struct {
 func (err *BadMessageTypeError) Error() string {
 	return fmt.Sprintf("bad message type: expected %s but got %s", err.Expected, err.Actual)
 }
+
+type UnregisteredClientNodeError struct {
+	Id string
+}
+
+func (err *UnregisteredClientNodeError) Error() string {
+	return fmt.Sprintf("no client node registered with id %s", err.Id)
+}

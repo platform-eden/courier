@@ -1,16 +1,18 @@
-package client
+package client_test
 
 import (
 	"fmt"
 	"testing"
+	"time"
 
-	"github.com/google/uuid"
+	"github.com/platform-edn/courier/pkg/client"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestUnregisteredSubscriberError_Error(t *testing.T) {
 	method := "testMethod"
 	subject := "test"
-	e := &UnregisteredSubscriberError{
+	e := &client.UnregisteredSubscriberError{
 		Method:  method,
 		Subject: subject,
 	}
@@ -22,200 +24,167 @@ func TestUnregisteredSubscriberError_Error(t *testing.T) {
 	}
 }
 
-/**************************************************************
-Expected Outcomes:
-- the id passed in should be added to a list for each subject passed in
-**************************************************************/
 func TestSubscriberMap_Add(t *testing.T) {
-	type test struct {
-		nodeCount int
-	}
-
-	tests := []test{
-		{
-			nodeCount: 10,
+	tests := map[string]struct {
+		subscribers []string
+		subjects    []string
+	}{
+		"adds all ids to given subjects": {
+			subscribers: []string{"1", "2", "3"},
+			subjects:    []string{"sub1", "sub2", "sub3"},
 		},
 	}
 
-	for _, tc := range tests {
-		subMap := newSubscriberMap()
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			subMap := client.NewSubscriberMap()
+			assert := assert.New(t)
 
-		for i := 0; i < tc.nodeCount; i++ {
-			id := uuid.NewString()
-			subjects := []string{"sub1", "sub2", "sub3"}
-
-			subMap.AddSubscriber(id, subjects...)
-		}
-
-		if len(subMap.subjectSubscribers) != 3 {
-			t.Fatalf("expected 3 subjects but got %v", len(subMap.subjectSubscribers))
-		}
-
-		for _, v := range subMap.subjectSubscribers {
-			if len(v) != tc.nodeCount {
-				t.Fatalf("expected subject to have %v ids but got %v instead", tc.nodeCount, len(v))
+			for _, id := range test.subscribers {
+				subMap.AddSubscriber(id, test.subjects...)
 			}
-		}
+
+			assert.Equal(len(subMap.SubjectSubscribers), len(test.subjects))
+
+			for _, v := range subMap.SubjectSubscribers {
+				assert.EqualValues(v, test.subscribers)
+			}
+		})
 	}
 }
 
-/**************************************************************
-Expected Outcomes:
-- all ids passed in should be removed from the given subjects
-**************************************************************/
 func TestSubscriberMap_Remove(t *testing.T) {
-	type test struct {
-		nodeCount int
-		exists    bool
+	tests := map[string]struct {
+		addSubscribers    []string
+		removeSubscribers []string
+		subjects          []string
+	}{
+		"all added subscribers are removed": {
+			addSubscribers:    []string{"1", "2", "3"},
+			removeSubscribers: []string{"1", "2", "3"},
+			subjects:          []string{"sub1", "sub2", "sub3"},
+		},
+		"removing a subscriber that doesn't exist doesn't panic": {
+			addSubscribers:    []string{"1", "2", "3"},
+			removeSubscribers: []string{"1", "2", "3", "4"},
+			subjects:          []string{"sub1", "sub2", "sub3"},
+		},
 	}
 
-	tests := []test{
-		{
-			nodeCount: 10,
-			exists:    true,
-		},
-		{
-			nodeCount: 10,
-			exists:    false,
-		},
-	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			subMap := client.NewSubscriberMap()
 
-	for _, tc := range tests {
-		subMap := newSubscriberMap()
-		ids := []string{}
-		subjects := []string{"sub1", "sub2", "sub3"}
-
-		for i := 0; i < tc.nodeCount; i++ {
-			id := uuid.NewString()
-			ids = append(ids, id)
-
-			subMap.AddSubscriber(id, subjects...)
-		}
-
-		if !tc.exists {
-			subMap.RemoveSubscriber("badId", subjects...)
-		}
-
-		for _, id := range ids {
-			subMap.RemoveSubscriber(id, subjects...)
-		}
-
-		if len(subMap.subjectSubscribers) != 3 {
-			t.Fatalf("expected 3 subjects but got %v", len(subMap.subjectSubscribers))
-		}
-
-		for _, v := range subMap.subjectSubscribers {
-			if len(v) != 0 {
-				t.Fatalf("expected subject to have %v ids but got %v instead", tc.nodeCount, len(v))
+			for _, id := range test.addSubscribers {
+				subMap.AddSubscriber(id, test.subjects...)
 			}
-		}
+
+			for _, id := range test.removeSubscribers {
+				subMap.RemoveSubscriber(id, test.subjects...)
+			}
+
+			assert.Equal(len(test.subjects), len(subMap.SubjectSubscribers))
+			for _, v := range subMap.SubjectSubscribers {
+				assert.Zero(len(v))
+			}
+		})
 	}
 }
 
-/**************************************************************
-Expected Outcomes:
-- ids passed in should be removed from all subjects passed in
-**************************************************************/
 func TestSubscriberMap_Subscribers(t *testing.T) {
-	type test struct {
-		subject         string
-		expectedFailure bool
-		nodeCount       int
+	tests := map[string]struct {
+		creationSubject string
+		accessSubject   string
+		subscribers     []string
+		err             error
+	}{
+		"returns all subscribers for a subject": {
+			creationSubject: "subject",
+			accessSubject:   "subject",
+			subscribers:     []string{"1", "2", "3"},
+			err:             nil,
+		},
+		"errors when accessing an unregistered subject": {
+			creationSubject: "subject",
+			accessSubject:   "fail",
+			subscribers:     []string{"1", "2", "3"},
+			err:             &client.UnregisteredSubjectError{},
+		},
 	}
 
-	tests := []test{
-		{
-			subject:         "test",
-			expectedFailure: true,
-			nodeCount:       10,
-		},
-		{
-			subject:         "test",
-			expectedFailure: false,
-			nodeCount:       10,
-		},
-	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			subMap := client.NewSubscriberMap()
+			subMap.SubjectSubscribers[test.creationSubject] = test.subscribers
 
-	for _, tc := range tests {
-		subMap := newSubscriberMap()
-
-		for i := 0; i < tc.nodeCount; i++ {
-			id := uuid.NewString()
-
-			subMap.AddSubscriber(id, tc.subject)
-		}
-
-		if tc.expectedFailure {
-			_, err := subMap.Subscribers("failure")
-			if err != nil {
-				continue
+			subscribers, err := subMap.Subscribers(test.accessSubject)
+			if test.err != nil {
+				errorType := test.err
+				assert.ErrorAs(err, &errorType)
+				return
 			}
 
-			t.Fatal("expected Subscribers to fail but it didn't")
-		}
-
-		subscribers, err := subMap.Subscribers(tc.subject)
-		if err != nil {
-			t.Fatalf("expected Subscribers to pass but it failed: %s", err)
-		}
-
-		if len(subscribers) != tc.nodeCount {
-			t.Fatalf("expected subject length to be %v but got %v", tc.nodeCount, len(subscribers))
-		}
+			assert.NoError(err)
+			assert.EqualValues(test.subscribers, subscribers)
+		})
 	}
 }
 
-/**************************************************************
-Expected Outcomes:
-- if an id exists in a subject list, this should return true
-- if a subject doesn't exist, this should return false
-**************************************************************/
-func TestSubscriberMap_CheckForSubscriber(t *testing.T) {
-	type test struct {
-		subject         string
-		checkSubject    string
-		id              string
-		checkId         string
-		expectedOutcome bool
-	}
-
-	tests := []test{
-		{
-			subject:         "test",
-			checkSubject:    "wowowow",
-			id:              "test",
-			checkId:         "test",
-			expectedOutcome: false,
+func TestSubscriberMap_GenerateIdsBySubject(t *testing.T) {
+	tests := map[string]struct {
+		creationSubject string
+		accessSubject   string
+		subscribers     []string
+		err             error
+	}{
+		"returns a channel with all subscribers for a subject": {
+			creationSubject: "subject",
+			accessSubject:   "subject",
+			subscribers:     []string{"1", "2", "3"},
+			err:             nil,
 		},
-		{
-			subject:         "test",
-			checkSubject:    "test",
-			id:              "test",
-			checkId:         "test",
-			expectedOutcome: true,
-		},
-		{
-			subject:         "test",
-			checkSubject:    "test",
-			id:              "test",
-			checkId:         "test1",
-			expectedOutcome: false,
+		"errors when accessing an unregistered subject": {
+			creationSubject: "subject",
+			accessSubject:   "fail",
+			subscribers:     []string{"1", "2", "3"},
+			err:             &client.UnregisteredSubjectError{},
 		},
 	}
 
-	for _, tc := range tests {
-		subMap := newSubscriberMap()
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			subMap := client.NewSubscriberMap()
 
-		subMap.AddSubscriber(tc.subject, tc.id)
+			subMap.SubjectSubscribers[test.creationSubject] = test.subscribers
 
-		exist := subMap.CheckForSubscriber(tc.checkSubject, tc.checkId)
+			out, err := subMap.GenerateIdsBySubject(test.accessSubject)
+			if test.err != nil {
+				errorType := test.err
+				assert.ErrorAs(err, &errorType)
+				return
+			}
 
-		if exist && !tc.expectedOutcome {
-			t.Fatalf("expected to return false but it returned true")
-		}
+			assert.NoError(err)
 
-		if !exist && tc.expectedOutcome {
-			t.Fatalf("expected to return true but it returned false")
-		}
+			done := make(chan struct{})
+			go func() {
+				subOut := []string{}
+				for s := range out {
+					subOut = append(subOut, s)
+				}
+
+				assert.EqualValues(test.subscribers, subOut)
+				close(done)
+			}()
+
+			select {
+			case <-done:
+			case <-time.After(time.Second * 3):
+				t.Fatal("did not close done channel in time")
+			}
+		})
 	}
 }

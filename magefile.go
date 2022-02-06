@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 
@@ -96,7 +95,7 @@ func mockWalkFunction(subDir string, info os.FileInfo, err error) error {
 	}
 
 	pkgDir := filepath.Join(baseDir, "pkg")
-	if subDir == pkgDir || path.Base(subDir) == "proto" {
+	if subDir == pkgDir {
 		return nil
 	}
 
