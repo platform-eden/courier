@@ -3,3 +3,4 @@ coverage.out
 .vscode
 .VS*
 /local
+/pkg/*/mocks

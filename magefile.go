@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -76,4 +77,60 @@ func Fmt() error {
 	}
 
 	return nil
+}
+
+//creates mocks for pkg interfaces
+func Mock() error {
+	pkgDir := filepath.Join(baseDir, "pkg")
+	err := filepath.Walk(pkgDir, mockWalkFunction)
+	if err != nil {
+		return fmt.Errorf("Mock: %w", err)
+	}
+
+	return nil
+}
+
+func mockWalkFunction(subDir string, info os.FileInfo, err error) error {
+	if err != nil {
+		return fmt.Errorf("mockWalkFunction: %w", err)
+	}
+
+	pkgDir := filepath.Join(baseDir, "pkg")
+	if subDir == pkgDir || path.Base(subDir) == "proto" {
+		return nil
+	}
+
+	isDir, err := isDirectory(subDir)
+	if err != nil {
+		return fmt.Errorf("mockWalkFunction: %w", err)
+	}
+
+	if isDir {
+		err = createMocks(subDir)
+		if err != nil {
+			return fmt.Errorf("mockWalkFunction: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func createMocks(subDir string) error {
+	os.Chdir(subDir)
+
+	err := sh.Run("mockery", "--all", "--case", "underscore")
+	if err != nil {
+		return fmt.Errorf("MakeMocks: %w", err)
+	}
+
+	return nil
+}
+
+func isDirectory(path string) (bool, error) {
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+
+	return fileInfo.IsDir(), nil
 }
