@@ -78,22 +78,22 @@ func (nm *clientNodeMap) GenerateClientNodes(in <-chan string) <-chan *ClientNod
 
 func (nm *clientNodeMap) FanClientNodeMessaging(ctx context.Context, msg messaging.Message, ids <-chan string) <-chan registry.Node {
 	failedNodes := make(chan registry.Node)
-	messagers := nm.GenerateClientNodes(ids)
+	clientNodes := nm.GenerateClientNodes(ids)
 
 	go func() {
 		wg := &sync.WaitGroup{}
 
-		for messager := range messagers {
+		for node := range clientNodes {
 			wg.Add(1)
-			go func(messager Messager) {
+			go func(node *ClientNode) {
 				defer wg.Done()
 
-				err := messager.AttemptMessage(ctx, msg)
+				err := node.AttemptMessage(ctx, msg)
 				if err != nil {
 					log.Printf("%s\n", fmt.Errorf("FanClientNodeMessaging: %w", err))
-					failedNodes <- messager.Subscriber()
+					failedNodes <- node.Subscriber()
 				}
-			}(messager)
+			}(node)
 		}
 
 		wg.Wait()
