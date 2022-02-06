@@ -48,7 +48,7 @@ func TestClientNodeMap_Node(t *testing.T) {
 			}
 
 			assert.NoError(err)
-			assert.EqualValues(node, *clientNode)
+			assert.EqualValues(node, clientNode)
 		})
 	}
 }

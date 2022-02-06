@@ -64,7 +64,7 @@ func (nm *clientNodeMap) GenerateClientNodes(in <-chan string) <-chan *ClientNod
 		for id := range in {
 			node, err := nm.Node(id)
 			if err != nil {
-				log.Printf("GenerateClientNodes: %w", err)
+				log.Printf("%s\n", fmt.Errorf("GenerateClientNodes: %w", err))
 				continue
 			}
 
@@ -85,15 +85,15 @@ func (nm *clientNodeMap) FanClientNodeMessaging(ctx context.Context, msg messagi
 
 		for messager := range messagers {
 			wg.Add(1)
-			go func() {
+			go func(messager Messager) {
 				defer wg.Done()
 
 				err := messager.AttemptMessage(ctx, msg)
 				if err != nil {
-					log.Printf("GenerateClientNodes: %w", err)
+					log.Printf("%s\n", fmt.Errorf("FanClientNodeMessaging: %w", err))
 					failedNodes <- messager.Subscriber()
 				}
-			}()
+			}(messager)
 		}
 
 		wg.Wait()
