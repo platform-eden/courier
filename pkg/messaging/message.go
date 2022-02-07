@@ -6,10 +6,10 @@ import (
 
 // the types of message that can be created
 // assigned based on what kind interaction the sender of the message wants with receiver
-type messageType int
+type MessageType int
 
 const (
-	PubMessage messageType = iota
+	PubMessage MessageType = iota
 	ReqMessage
 	RespMessage
 )
@@ -17,7 +17,7 @@ const (
 // Message to be sent between nodes
 type Message struct {
 	Id      string
-	Type    messageType
+	Type    MessageType
 	Subject string
 	Content []byte
 }
@@ -58,7 +58,7 @@ func NewRespMessage(id string, subject string, content []byte) Message {
 	return m
 }
 
-func (m messageType) String() string {
+func (m MessageType) String() string {
 	types := []string{
 		"PubMessage",
 		"RespMessage",

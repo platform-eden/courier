@@ -1,315 +1,156 @@
-package client
+package client_test
 
-// import (
-// 	"context"
-// 	"fmt"
-// 	"testing"
-// 	"time"
+import (
+	"errors"
+	"testing"
+	"time"
 
-// 	"github.com/google/uuid"
-// 	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
-// 	"github.com/platform-edn/courier/pkg/messaging"
-// 	"github.com/platform-edn/courier/pkg/registry"
-// 	"google.golang.org/grpc"
-// )
+	"github.com/platform-edn/courier/pkg/client"
+	"github.com/platform-edn/courier/pkg/messaging"
+	"github.com/platform-edn/courier/pkg/messaging/mocks"
+	"github.com/platform-edn/courier/pkg/registry"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"golang.org/x/net/context"
+)
 
-// func TestClientNodeSendError_Error(t *testing.T) {
-// 	err := fmt.Errorf("test error")
-// 	method := "testMethod"
-// 	e := &ClientNodeSendError{
-// 		Method: method,
-// 		Err:    err,
-// 	}
+func TestNewClientNode(t *testing.T) {
+	tests := map[string]struct {
+		nodeId  string
+		port    string
+		err     error
+		options []client.ClientNodeOption
+	}{
+		"creates client node": {
+			nodeId: "test",
+			port:   "8000",
+			options: []client.ClientNodeOption{
+				client.WithInsecure(),
+				client.WithClientRetryOptions(client.ClientRetryOptionsInput{
+					MaxAttempts:     1,
+					BackOff:         time.Second,
+					Jitter:          1,
+					PerRetryTimeout: time.Second,
+				}),
+			},
+			err: nil,
+		},
+	}
 
-// 	message := e.Error()
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			node := registry.RemovePointers(registry.CreateTestNodes(1, &registry.TestNodeOptions{
+				Port: test.port,
+			}))[0]
+			clientNode, err := client.NewClientNode(node, test.nodeId, test.options...)
+			if test.err != nil {
+				errorType := test.err
+				assert.ErrorAs(err, &errorType)
+				return
+			}
 
-// 	if message != fmt.Sprintf("%s: %s", method, err) {
-// 		t.Fatalf("expected error message to be %s but got %s", fmt.Sprintf("%s: %s", method, err), message)
-// 	}
-// }
+			assert.NoError(err)
+			assert.EqualValues(node, clientNode.Node)
+			assert.Equal(test.nodeId, clientNode.CurrentId)
+		})
+	}
+}
 
-// func TestClientNodeDialError_Error(t *testing.T) {
-// 	hostname := "host"
-// 	port := "8080"
-// 	err := fmt.Errorf("test error")
-// 	method := "testMethod"
-// 	e := &ClientNodeDialError{
-// 		Method:   method,
-// 		Hostname: hostname,
-// 		Port:     port,
-// 		Err:      err,
-// 	}
+func TestClientNode_AttemptMessage(t *testing.T) {
+	tests := map[string]struct {
+		nodeId      string
+		messageType messaging.MessageType
+		message     messaging.Message
+		err         error
+		options     []client.ClientNodeOption
+	}{
+		"sends publish message": {
+			nodeId:      "test",
+			messageType: messaging.PubMessage,
+			message:     messaging.NewPubMessage("messageId", "testSubject", []byte("testContent")),
+			options: []client.ClientNodeOption{
+				client.WithInsecure(),
+			},
+			err: nil,
+		},
+		"sends request message": {
+			nodeId:      "test",
+			messageType: messaging.ReqMessage,
+			message:     messaging.NewReqMessage("messageId", "testSubject", []byte("testContent")),
+			options: []client.ClientNodeOption{
+				client.WithInsecure(),
+			},
+			err: nil,
+		},
+		"sends response message": {
+			nodeId:      "test",
+			messageType: messaging.RespMessage,
+			message:     messaging.NewRespMessage("messageId", "testSubject", []byte("testContent")),
+			options: []client.ClientNodeOption{
+				client.WithInsecure(),
+			},
+			err: nil,
+		},
+		"returns an error when sending a publish message": {
+			nodeId:      "test",
+			messageType: messaging.PubMessage,
+			message:     messaging.NewPubMessage("messageId", "testSubject", []byte("testContent")),
+			options: []client.ClientNodeOption{
+				client.WithInsecure(),
+			},
+			err: errors.New("bad!"),
+		},
+		"returns an error when sending a request message": {
+			nodeId:      "test",
+			messageType: messaging.ReqMessage,
+			message:     messaging.NewReqMessage("messageId", "testSubject", []byte("testContent")),
+			options: []client.ClientNodeOption{
+				client.WithInsecure(),
+			},
+			err: errors.New("bad!"),
+		},
+		"returns an error when sending a response message": {
+			nodeId:      "test",
+			messageType: messaging.RespMessage,
+			message:     messaging.NewRespMessage("messageId", "testSubject", []byte("testContent")),
+			options: []client.ClientNodeOption{
+				client.WithInsecure(),
+			},
+			err: errors.New("bad!"),
+		},
+	}
 
-// 	message := e.Error()
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			node := registry.RemovePointers(registry.CreateTestNodes(1, &registry.TestNodeOptions{}))[0]
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+			defer cancel()
+			cli := new(mocks.MessageClient)
 
-// 	if message != fmt.Sprintf("%s: could not create connection at %s:%s: %s", method, hostname, port, err) {
-// 		t.Fatalf("expected error message to be %s but got %s", fmt.Sprintf("%s: could not create connection at %s:%s: %s", method, hostname, port, err), message)
-// 	}
-// }
+			switch test.messageType {
+			case messaging.PubMessage:
+				cli.On("PublishMessage", ctx, mock.Anything, mock.Anything).Return(&messaging.PublishMessageResponse{}, test.err)
+			case messaging.RespMessage:
+				cli.On("ResponseMessage", ctx, mock.Anything, mock.Anything).Return(&messaging.ResponseMessageResponse{}, test.err)
+			case messaging.ReqMessage:
+				cli.On("RequestMessage", ctx, mock.Anything, mock.Anything).Return(&messaging.RequestMessageResponse{}, test.err)
+			}
 
-// func TestClientNodeMessageTypeError_Error(t *testing.T) {
-// 	mType := messaging.PubMessage
-// 	method := "testMethod"
-// 	e := &ClientNodeMessageTypeError{
-// 		Method: method,
-// 		Type:   mType.String(),
-// 	}
+			clientNode, err := client.NewClientNode(node, test.nodeId, test.options...)
+			assert.NoError(err)
+			clientNode.MessageClient = cli
 
-// 	message := e.Error()
+			err = clientNode.AttemptMessage(ctx, test.message)
+			if test.err != nil {
+				errorType := test.err
+				assert.ErrorAs(err, &errorType)
+				return
+			}
 
-// 	if message != fmt.Sprintf("%s: message must be of type %s", method, mType) {
-// 		t.Fatalf("expected error message to be %s but got %s", fmt.Sprintf("%s: message must be of type %s", method, mType), message)
-// 	}
-// }
-
-// /**************************************************************
-// Expected Outcomes:
-// - should fail if options are incorrect for creating a a grpc client connection
-// **************************************************************/
-// func TestNewClientNode(t *testing.T) {
-// 	type test struct {
-// 		port            string
-// 		options         []ClientNodeOption
-// 		expectedFailure bool
-// 	}
-
-// 	tests := []test{
-// 		{
-// 			options:         []ClientNodeOption{WithDialOptions(grpc.WithInsecure())},
-// 			expectedFailure: false,
-// 		},
-// 		{
-// 			options:         []ClientNodeOption{},
-// 			expectedFailure: true,
-// 		},
-// 	}
-
-// 	for _, tc := range tests {
-// 		n := registry.CreateTestNodes(1, &registry.TestNodeOptions{})[0]
-// 		n.Port = tc.port
-// 		_, err := newClientNode(*n, uuid.NewString(), tc.options...)
-// 		if err != nil {
-// 			if tc.expectedFailure {
-// 				continue
-// 			}
-// 			t.Fatalf("expected newClientNode to pass but it failed: %s", err)
-// 		}
-
-// 		if tc.expectedFailure {
-// 			t.Fatal("expected newClientNode to fail but it passed")
-// 		}
-// 	}
-// }
-
-// /**************************************************************
-// Expected Outcomes:
-// - should send a publish message to a grpc server successfully
-// - returns error if the message was not sent successfully
-// - returns error if message is not a publish message
-// **************************************************************/
-// func TestClientNode_SendPublishMessage(t *testing.T) {
-// 	defer testMessageServer.SetToPass()
-
-// 	type test struct {
-// 		m               Message
-// 		serverFailure   bool
-// 		expectedFailure bool
-// 	}
-
-// 	tests := []test{
-// 		{
-// 			m:               NewPubMessage(uuid.NewString(), "test", []byte("test")),
-// 			serverFailure:   true,
-// 			expectedFailure: true,
-// 		},
-// 		{
-// 			m:               NewPubMessage(uuid.NewString(), "test", []byte("test")),
-// 			serverFailure:   false,
-// 			expectedFailure: false,
-// 		},
-// 		{
-// 			m:               NewReqMessage(uuid.NewString(), "test", []byte("test")),
-// 			serverFailure:   false,
-// 			expectedFailure: true,
-// 		},
-// 	}
-
-// 	for _, tc := range tests {
-// 		if tc.expectedFailure {
-// 			testMessageServer.SetToFail()
-// 		} else {
-// 			testMessageServer.SetToPass()
-// 		}
-
-// 		opts := []grpc_retry.CallOption{
-// 			grpc_retry.WithPerRetryTimeout(time.Second),
-// 			grpc_retry.WithBackoff(grpc_retry.BackoffExponentialWithJitter(time.Millisecond*100, 0.2)),
-// 			grpc_retry.WithMax(3),
-// 		}
-
-// 		_, conn, err := NewMockClient("bufnet", testMessageServer.BufDialer, grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor(opts...)))
-// 		if err != nil {
-// 			if tc.expectedFailure {
-// 				continue
-// 			}
-// 			t.Fatalf("could not creat client for server: %s", err)
-// 		}
-// 		defer conn.Close()
-
-// 		cc := clientNode{
-// 			connection: conn,
-// 			currentId:  uuid.NewString(),
-// 			Node:       *CreateTestNodes(1, &TestNodeOptions{})[0],
-// 		}
-
-// 		err = cc.sendPublishMessage(context.Background(), tc.m)
-// 		if err != nil {
-// 			if tc.expectedFailure {
-// 				continue
-// 			}
-// 			t.Fatalf("could not send message: %s", err)
-// 		}
-
-// 		if tc.expectedFailure {
-// 			t.Fatalf("sendPublishMessage was expected to fail but it didn't")
-// 		}
-// 	}
-// }
-
-// /**************************************************************
-// Expected Outcomes:
-// - should send a request message to a grpc server successfully
-// - returns error if the message was not sent successfully
-// - returns error if message is not a publish message
-// **************************************************************/
-// func TestClientNode_SendRequestMessage(t *testing.T) {
-// 	defer testMessageServer.SetToPass()
-
-// 	type test struct {
-// 		m               Message
-// 		serverFailure   bool
-// 		expectedFailure bool
-// 	}
-
-// 	tests := []test{
-// 		{
-// 			m:               NewReqMessage(uuid.NewString(), "test", []byte("test")),
-// 			serverFailure:   true,
-// 			expectedFailure: true,
-// 		},
-// 		{
-// 			m:               NewReqMessage(uuid.NewString(), "test", []byte("test")),
-// 			serverFailure:   false,
-// 			expectedFailure: false,
-// 		},
-// 		{
-// 			m:               NewPubMessage(uuid.NewString(), "test", []byte("test")),
-// 			serverFailure:   false,
-// 			expectedFailure: true,
-// 		},
-// 	}
-
-// 	for _, tc := range tests {
-// 		if tc.expectedFailure {
-// 			testMessageServer.SetToFail()
-// 		} else {
-// 			testMessageServer.SetToPass()
-// 		}
-
-// 		_, conn, err := NewMockClient("bufnet", testMessageServer.BufDialer)
-// 		if err != nil {
-// 			if tc.expectedFailure {
-// 				continue
-// 			}
-// 			t.Fatalf("could not creat client for server: %s", err)
-// 		}
-// 		defer conn.Close()
-
-// 		cc := clientNode{
-// 			connection: conn,
-// 			currentId:  uuid.NewString(),
-// 			Node:       *CreateTestNodes(1, &TestNodeOptions{})[0],
-// 		}
-
-// 		err = cc.sendRequestMessage(context.Background(), tc.m)
-// 		if err != nil {
-// 			if tc.expectedFailure {
-// 				continue
-// 			}
-// 			t.Fatalf("could not send message: %s", err)
-// 		}
-
-// 		if tc.expectedFailure {
-// 			t.Fatalf("sendRequestMessage was expected to fail but it didn't")
-// 		}
-// 	}
-// }
-
-// /**************************************************************
-// Expected Outcomes:
-// - should send a request message to a grpc server successfully
-// - returns error if the message was not sent successfully
-// - returns error if message is not a publish message
-// **************************************************************/
-// func TestClientNode_SendResponseMessage(t *testing.T) {
-// 	defer testMessageServer.SetToPass()
-
-// 	type test struct {
-// 		m               Message
-// 		serverFailure   bool
-// 		expectedFailure bool
-// 	}
-
-// 	tests := []test{
-// 		{
-// 			m:               NewRespMessage(uuid.NewString(), "test", []byte("test")),
-// 			serverFailure:   true,
-// 			expectedFailure: true,
-// 		},
-// 		{
-// 			m:               NewRespMessage(uuid.NewString(), "test", []byte("test")),
-// 			serverFailure:   false,
-// 			expectedFailure: false,
-// 		},
-// 		{
-// 			m:               NewPubMessage(uuid.NewString(), "test", []byte("test")),
-// 			serverFailure:   false,
-// 			expectedFailure: true,
-// 		},
-// 	}
-
-// 	for _, tc := range tests {
-// 		if tc.expectedFailure {
-// 			testMessageServer.SetToFail()
-// 		} else {
-// 			testMessageServer.SetToPass()
-// 		}
-
-// 		_, conn, err := NewMockClient("bufnet", testMessageServer.BufDialer)
-// 		if err != nil {
-// 			if tc.expectedFailure {
-// 				continue
-// 			}
-// 			t.Fatalf("could not creat client for server: %s", err)
-// 		}
-// 		defer conn.Close()
-
-// 		cc := clientNode{
-// 			connection: conn,
-// 			currentId:  uuid.NewString(),
-// 			Node:       *CreateTestNodes(1, &TestNodeOptions{})[0],
-// 		}
-
-// 		err = cc.sendResponseMessage(context.Background(), tc.m)
-// 		if err != nil {
-// 			if tc.expectedFailure {
-// 				continue
-// 			}
-// 			t.Fatalf("could not send message: %s", err)
-// 		}
-
-// 		if tc.expectedFailure {
-// 			t.Fatalf("sendResponseMessage was expected to fail but it didn't")
-// 		}
-// 	}
-// }
+			assert.NoError(err)
+			cli.AssertExpectations(t)
+		})
+	}
+}

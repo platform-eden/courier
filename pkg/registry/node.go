@@ -42,9 +42,11 @@ type TestNodeOptions struct {
 	SubscribedSubjects  []string
 	BroadcastedSubjects []string
 	Id                  string
+	Port                string
 }
 
 // CreateTestNodes creates a quantity of randomized nodes based on the options passed in
+// TODO: clean this up with functional parameters
 func CreateTestNodes(count int, options *TestNodeOptions) []*Node {
 	nodes := []*Node{}
 	var broadSubjects []string
@@ -63,7 +65,6 @@ func CreateTestNodes(count int, options *TestNodeOptions) []*Node {
 
 	for i := 0; i < count; i++ {
 		ip := fmt.Sprintf("%v.%v.%v.%v", rand.Intn(255), rand.Intn(255), rand.Intn(255), rand.Intn(255))
-		port := fmt.Sprint(rand.Intn(9999-1000) + 1000)
 		subcount := (rand.Intn(len(subSubjects)) + 1)
 		broadcount := rand.Intn(len(broadSubjects) + 1)
 		var subs []string
@@ -82,6 +83,12 @@ func CreateTestNodes(count int, options *TestNodeOptions) []*Node {
 			id = options.Id
 		} else {
 			id = uuid.NewString()
+		}
+		var port string
+		if options.Port != "" {
+			port = options.Port
+		} else {
+			port = fmt.Sprint(rand.Intn(9999-1000) + 1000)
 		}
 		n := NewNode(id, ip, port, subs, broads)
 		nodes = append(nodes, n)

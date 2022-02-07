@@ -15,7 +15,7 @@ import (
 type ClientNode struct {
 	registry.Node
 	messaging.MessageClient
-	currentId string
+	CurrentId string
 }
 
 type ClientNodeOptions struct {
@@ -25,18 +25,18 @@ type ClientNodeOptions struct {
 type ClientNodeOption func(c *ClientNodeOptions) *ClientNodeOptions
 
 type ClientRetryOptionsInput struct {
-	maxAttempts     uint
-	backOff         time.Duration
-	jitter          float64
-	perRetryTimeout time.Duration
+	MaxAttempts     uint
+	BackOff         time.Duration
+	Jitter          float64
+	PerRetryTimeout time.Duration
 }
 
 func WithClientRetryOptions(input ClientRetryOptionsInput) ClientNodeOption {
 	return func(c *ClientNodeOptions) *ClientNodeOptions {
 		opts := []grpc_retry.CallOption{
-			grpc_retry.WithPerRetryTimeout(input.perRetryTimeout),
-			grpc_retry.WithBackoff(grpc_retry.BackoffExponentialWithJitter(input.backOff, input.jitter)),
-			grpc_retry.WithMax(input.maxAttempts),
+			grpc_retry.WithPerRetryTimeout(input.PerRetryTimeout),
+			grpc_retry.WithBackoff(grpc_retry.BackoffExponentialWithJitter(input.BackOff, input.Jitter)),
+			grpc_retry.WithMax(input.MaxAttempts),
 		}
 
 		c.options = append(c.options, grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor(opts...)))
@@ -77,7 +77,7 @@ func NewClientNode(node registry.Node, currrentId string, optionFuncs ...ClientN
 	n := &ClientNode{
 		Node:          node,
 		MessageClient: messaging.NewMessageClient(conn),
-		currentId:     currrentId,
+		CurrentId:     currrentId,
 	}
 
 	return n, nil
@@ -98,7 +98,7 @@ func (client *ClientNode) AttemptMessage(ctx context.Context, msg messaging.Mess
 		_, err = client.RequestMessage(ctx, &messaging.RequestMessageRequest{
 			Message: &messaging.RequestMessage{
 				Id:      msg.Id,
-				NodeId:  client.currentId,
+				NodeId:  client.CurrentId,
 				Subject: msg.Subject,
 				Content: msg.Content,
 			},
@@ -119,53 +119,3 @@ func (client *ClientNode) AttemptMessage(ctx context.Context, msg messaging.Mess
 
 	return nil
 }
-
-func (client *ClientNode) Subscriber() registry.Node {
-	return client.Node
-}
-
-// func (c *ClientNode) SendPublishMessage(ctx context.Context, m messaging.Message) error {
-// 	_, err := c.PublishMessage(ctx, &messaging.PublishMessageRequest{
-// 		Message: &messaging.PublishMessage{
-// 			Id:      m.Id,
-// 			Subject: m.Subject,
-// 			Content: m.Content,
-// 		},
-// 	})
-// 	if err != nil {
-// 		return fmt.Errorf("SendPublishMessage: %w", err)
-// 	}
-
-// 	return nil
-// }
-
-// func (c *ClientNode) SendRequestMessage(ctx context.Context, m messaging.Message) error {
-// 	_, err := c.RequestMessage(ctx, &messaging.RequestMessageRequest{
-// 		Message: &messaging.RequestMessage{
-// 			Id:      m.Id,
-// 			NodeId:  c.Id,
-// 			Subject: m.Subject,
-// 			Content: m.Content,
-// 		},
-// 	})
-// 	if err != nil {
-// 		return fmt.Errorf("SendRequestMessage: %w", err)
-// 	}
-
-// 	return nil
-// }
-
-// func (c *ClientNode) SendResponseMessage(ctx context.Context, m messaging.Message) error {
-// 	_, err := c.ResponseMessage(ctx, &messaging.ResponseMessageRequest{
-// 		Message: &messaging.ResponseMessage{
-// 			Id:      m.Id,
-// 			Subject: m.Subject,
-// 			Content: m.Content,
-// 		},
-// 	})
-// 	if err != nil {
-// 		return fmt.Errorf("SendResponseMessage: %w", err)
-// 	}
-
-// 	return nil
-// }

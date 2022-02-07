@@ -45,7 +45,7 @@ func TestMessageType_String(t *testing.T) {
 		"ReqMessage",
 	}
 
-	types := []messageType{PubMessage, ReqMessage, RespMessage}
+	types := []MessageType{PubMessage, ReqMessage, RespMessage}
 
 	for i, m := range types {
 		if m.String() != ts[i] {

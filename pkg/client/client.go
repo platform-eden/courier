@@ -26,7 +26,7 @@ type ClientNodeMapper interface {
 	Node(string) (*ClientNode, error)
 	AddClientNode(ClientNode)
 	RemoveClientNode(string)
-	FanClientNodeMessaging(context.Context, messaging.Message, <-chan string) <-chan registry.Node
+	FanClientNodeMessaging(context.Context, messaging.Message, <-chan string) chan registry.Node
 }
 type messagingClient struct {
 	ClientNodeMapper
@@ -103,7 +103,7 @@ func (c *messagingClient) Publish(ctx context.Context, msg messaging.Message) er
 	}
 
 	failed := c.FanClientNodeMessaging(ctx, msg, ids)
-	done := c.forwardFailedConnections(failed)
+	done := c.ForwardFailedConnections(failed)
 
 	select {
 	case <-done:
@@ -131,13 +131,13 @@ func (c *messagingClient) Response(ctx context.Context, msg messaging.Message) e
 	}
 
 	failed := c.FanClientNodeMessaging(ctx, msg, ids)
-	done := c.forwardFailedConnections(failed)
+	done := c.ForwardFailedConnections(failed)
 
 	select {
 	case <-done:
 		break
 	case <-ctx.Done():
-		return fmt.Errorf("Publish: %w", &ContextDoneUnsentMessageError{
+		return fmt.Errorf("Response: %w", &ContextDoneUnsentMessageError{
 			MessageId: msg.Id,
 		})
 	}
@@ -159,7 +159,7 @@ func (c *messagingClient) Request(ctx context.Context, msg messaging.Message) er
 	}
 
 	failed := c.FanClientNodeMessaging(ctx, msg, ids)
-	done := c.forwardFailedConnections(failed)
+	done := c.ForwardFailedConnections(failed)
 
 	select {
 	case <-done:
@@ -174,7 +174,7 @@ func (c *messagingClient) Request(ctx context.Context, msg messaging.Message) er
 }
 
 // forwardFailedConnections takes a channel of nodes and sends them through a stale channel as well as a failed connection channel.  Returns a bool channel that receives true when it's done
-func (c *messagingClient) forwardFailedConnections(in <-chan registry.Node) <-chan struct{} {
+func (c *messagingClient) ForwardFailedConnections(in chan registry.Node) <-chan struct{} {
 	out := make(chan struct{})
 
 	go func() {

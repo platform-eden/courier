@@ -2,15 +2,6 @@ package client
 
 import "fmt"
 
-type MessagingClientError struct {
-	Method string
-	Err    error
-}
-
-func (err *MessagingClientError) Error() string {
-	return fmt.Sprintf("%s: %s", err.Method, err.Err)
-}
-
 type UnregisteredSubjectError struct {
 	Subject string
 }
@@ -51,35 +42,6 @@ type ContextDoneUnsentMessageError struct {
 
 func (err *ContextDoneUnsentMessageError) Error() string {
 	return fmt.Sprintf("context completed before message %s could be sent", err.MessageId)
-}
-
-type ClientNodeDialError struct {
-	Method   string
-	Hostname string
-	Port     string
-	Err      error
-}
-
-func (err *ClientNodeDialError) Error() string {
-	return fmt.Sprintf("%s: could not create connection at %s:%s: %s", err.Method, err.Hostname, err.Port, err.Err)
-}
-
-type ClientNodeSendError struct {
-	Method string
-	Err    error
-}
-
-func (err *ClientNodeSendError) Error() string {
-	return fmt.Sprintf("%s: %s", err.Method, err.Err)
-}
-
-type ClientNodeMessageTypeError struct {
-	Method string
-	Type   string
-}
-
-func (err *ClientNodeMessageTypeError) Error() string {
-	return fmt.Sprintf("%s: message must be of type %s", err.Method, err.Type)
 }
 
 type BadMessageTypeError struct {

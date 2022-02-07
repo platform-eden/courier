@@ -11,11 +11,6 @@ import (
 	"github.com/platform-edn/courier/pkg/registry"
 )
 
-type Messager interface {
-	AttemptMessage(ctx context.Context, msg messaging.Message) error
-	Subscriber() registry.Node
-}
-
 type clientNodeMap struct {
 	Nodes map[string]ClientNode
 	lock.Locker
@@ -76,24 +71,24 @@ func (nm *clientNodeMap) GenerateClientNodes(in <-chan string) <-chan *ClientNod
 	return out
 }
 
-func (nm *clientNodeMap) FanClientNodeMessaging(ctx context.Context, msg messaging.Message, ids <-chan string) <-chan registry.Node {
+func (nm *clientNodeMap) FanClientNodeMessaging(ctx context.Context, msg messaging.Message, ids <-chan string) chan registry.Node {
 	failedNodes := make(chan registry.Node)
 	clientNodes := nm.GenerateClientNodes(ids)
 
 	go func() {
 		wg := &sync.WaitGroup{}
 
-		for node := range clientNodes {
+		for client := range clientNodes {
 			wg.Add(1)
-			go func(node *ClientNode) {
+			go func(client *ClientNode) {
 				defer wg.Done()
 
-				err := node.AttemptMessage(ctx, msg)
+				err := client.AttemptMessage(ctx, msg)
 				if err != nil {
 					log.Printf("%s\n", fmt.Errorf("FanClientNodeMessaging: %w", err))
-					failedNodes <- node.Subscriber()
+					failedNodes <- client.Node
 				}
-			}(node)
+			}(client)
 		}
 
 		wg.Wait()
