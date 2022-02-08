@@ -3,9 +3,7 @@ on:
   pull_request:
     branches:
       - main
-env:
-  GOPATH: "/go"
-  GOBIN: "/go/bin"
+
 jobs:
   buildPush:
     name: Unit Test
@@ -16,12 +14,11 @@ jobs:
 
       - name: Set Up Go
         uses: actions/setup-go@v2
+        with:
+          go-version: '^1.17' 
 
       - name: Install Mockery
         run: go install github.com/vektra/mockery
-
-      - name: Add GOBIN to PATH
-        run: echo $GOBIN >> $GITHUB_PATH
 
       - name: Create Mocks
         uses: magefile/mage-action@v1
