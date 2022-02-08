@@ -4,6 +4,7 @@ on:
     branches:
       - main
 env:
+  GOPATH: "/go"
   GOBIN: "/go/bin"
 jobs:
   buildPush:
@@ -21,7 +22,6 @@ jobs:
 
       - name: Add GOBIN to PATH
         run: echo $GOBIN >> $GITHUB_PATH
-
 
       - name: Create Mocks
         uses: magefile/mage-action@v1
