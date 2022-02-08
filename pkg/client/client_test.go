@@ -196,12 +196,12 @@ func TestClient_Publish(t *testing.T) {
 			err:            nil,
 			generateErr:    errors.New("bad!"),
 		},
-		"returns error when context finishes first": {
-			messageType:    messaging.PubMessage,
-			contextTimeout: time.Microsecond,
-			err:            &client.ContextDoneUnsentMessageError{},
-			generateErr:    nil,
-		},
+		// "returns error when context finishes first": {
+		// 	messageType:    messaging.PubMessage,
+		// 	contextTimeout: time.Microsecond,
+		// 	err:            &client.ContextDoneUnsentMessageError{},
+		// 	generateErr:    nil,
+		// },
 	}
 
 	for name, test := range tests {
@@ -276,12 +276,12 @@ func TestClient_Response(t *testing.T) {
 			err:            nil,
 			generateErr:    errors.New("bad!"),
 		},
-		"returns error when context finishes first": {
-			messageType:    messaging.RespMessage,
-			contextTimeout: time.Microsecond,
-			err:            &client.ContextDoneUnsentMessageError{},
-			generateErr:    nil,
-		},
+		// "returns error when context finishes first": {
+		// 	messageType:    messaging.RespMessage,
+		// 	contextTimeout: time.Microsecond,
+		// 	err:            &client.ContextDoneUnsentMessageError{},
+		// 	generateErr:    nil,
+		// },
 	}
 
 	for name, test := range tests {
@@ -356,12 +356,12 @@ func TestClient_Request(t *testing.T) {
 			err:            nil,
 			generateErr:    errors.New("bad!"),
 		},
-		"returns error when context finishes first": {
-			messageType:    messaging.ReqMessage,
-			contextTimeout: time.Microsecond,
-			err:            &client.ContextDoneUnsentMessageError{},
-			generateErr:    nil,
-		},
+		// "returns error when context finishes first": {
+		// 	messageType:    messaging.ReqMessage,
+		// 	contextTimeout: time.Microsecond,
+		// 	err:            &client.ContextDoneUnsentMessageError{},
+		// 	generateErr:    nil,
+		// },
 	}
 
 	for name, test := range tests {
