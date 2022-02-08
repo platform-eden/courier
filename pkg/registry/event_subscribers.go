@@ -3,13 +3,13 @@ package registry
 import "sync"
 
 type NodeEventSubscribers struct {
-	channels []chan NodeEvent
+	Channels []chan NodeEvent
 	sync.RWMutex
 }
 
 func NewNodeEventSubscribers() *NodeEventSubscribers {
 	subscribers := NodeEventSubscribers{
-		channels: []chan NodeEvent{},
+		Channels: []chan NodeEvent{},
 		RWMutex:  sync.RWMutex{},
 	}
 
@@ -21,19 +21,19 @@ func (subscribers *NodeEventSubscribers) SubscribeToEvents() chan NodeEvent {
 	defer subscribers.Unlock()
 
 	events := make(chan NodeEvent)
-	subscribers.channels = append(subscribers.channels, events)
+	subscribers.Channels = append(subscribers.Channels, events)
 
 	return events
 }
 
-func (subscribers *NodeEventSubscribers) closeListeners() {
-	for _, channel := range subscribers.channels {
+func (subscribers *NodeEventSubscribers) CloseListeners() {
+	for _, channel := range subscribers.Channels {
 		close(channel)
 	}
 }
 
-func (subscribers *NodeEventSubscribers) forwardEvent(event NodeEvent) {
-	for _, channel := range subscribers.channels {
+func (subscribers *NodeEventSubscribers) ForwardEvent(event NodeEvent) {
+	for _, channel := range subscribers.Channels {
 		channel <- event
 	}
 }

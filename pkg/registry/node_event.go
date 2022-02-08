@@ -6,6 +6,8 @@ const (
 	Add NodeEventType = iota
 	Remove
 	Failed
+	// used for testing only
+	Unknown
 )
 
 type NodeEvent struct {
@@ -13,13 +15,13 @@ type NodeEvent struct {
 	Event NodeEventType
 }
 
-func NewNodeEvent(node Node, event NodeEventType) *NodeEvent {
+func NewNodeEvent(node Node, event NodeEventType) NodeEvent {
 	nodeEvent := NodeEvent{
 		Node:  node,
 		Event: event,
 	}
 
-	return &nodeEvent
+	return nodeEvent
 }
 
 func (m NodeEventType) String() string {

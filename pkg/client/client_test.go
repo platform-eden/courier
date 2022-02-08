@@ -124,7 +124,7 @@ func TestClient_ListenForNodeEvents(t *testing.T) {
 					SubscribedSubjects: []string{"sub"},
 				}))[0]
 				event := registry.NewNodeEvent(node, test.event)
-				events <- *event
+				events <- event
 
 				cancel()
 				wg.Wait()

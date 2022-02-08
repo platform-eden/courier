@@ -7,16 +7,14 @@ import (
 )
 
 type NodeMapper interface {
-	Node(string) (Node, bool)
-	Nodes() map[string]Node
-	addNode(Node)
-	removeNode(string)
+	AddNode(Node)
+	RemoveNode(string)
 }
 
 type SubscriberLister interface {
 	SubscribeToEvents() chan NodeEvent
-	closeListeners()
-	forwardEvent(event NodeEvent)
+	CloseListeners()
+	ForwardEvent(event NodeEvent)
 }
 type NodeRegistry struct {
 	eventIn chan NodeEvent
@@ -44,25 +42,26 @@ func (registry *NodeRegistry) RegisterNodes(ctx context.Context, wg *sync.WaitGr
 	for {
 		select {
 		case <-ctx.Done():
-			registry.closeListeners()
+			registry.CloseListeners()
 			return
 		case e := <-registry.eventIn:
 			switch e.Event {
 			case Add:
-				registry.addNode(e.Node)
+				registry.AddNode(e.Node)
+				registry.ForwardEvent(e)
 			case Remove:
-				registry.removeNode(e.Node.Id)
+				registry.RemoveNode(e.Node.Id)
+				registry.ForwardEvent(e)
 			case Failed:
 				// need to add heartbeat service to this
-				registry.removeNode(e.Node.Id)
+				registry.RemoveNode(e.Node.Id)
+				registry.ForwardEvent(e)
 			default:
 				errorChannel <- fmt.Errorf("RegisterNodes: %w", &UnknownNodeEventError{
 					nodeId:    e.Id,
 					eventType: e.Event,
 				})
 			}
-
-			registry.forwardEvent(e)
 		}
 	}
 }

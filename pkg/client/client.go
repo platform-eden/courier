@@ -184,7 +184,7 @@ func (c *messagingClient) ForwardFailedConnections(in chan registry.Node) <-chan
 			c.RemoveSubscriber(n.Id, n.SubscribedSubjects...)
 
 			event := registry.NewNodeEvent(n, registry.Failed)
-			c.failedEvents <- *event
+			c.failedEvents <- event
 
 		}
 		close(out)

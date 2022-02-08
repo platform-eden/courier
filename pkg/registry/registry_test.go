@@ -1,76 +1,131 @@
-package registry
+package registry_test
 
 import (
 	"context"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/platform-edn/courier/pkg/registry"
+	"github.com/platform-edn/courier/pkg/registry/mocks"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestNodeRegistry_RegisterNodes(t *testing.T) {
-	type test struct {
-		event *NodeEvent
+	var badEvent registry.NodeEventType = 4
+
+	tests := map[string]struct {
+		event registry.NodeEvent
+	}{
+		"adds node to registry": {
+			event: registry.NewNodeEvent(
+				registry.RemovePointers(
+					registry.CreateTestNodes(1, &registry.TestNodeOptions{}),
+				)[0],
+				registry.Add,
+			),
+		},
+		"removes node from registry on remove": {
+			event: registry.NewNodeEvent(
+				registry.RemovePointers(
+					registry.CreateTestNodes(1, &registry.TestNodeOptions{}),
+				)[0],
+				registry.Remove,
+			),
+		},
+		"removes node from registry on fail": {
+			event: registry.NewNodeEvent(
+				registry.RemovePointers(
+					registry.CreateTestNodes(1, &registry.TestNodeOptions{}),
+				)[0],
+				registry.Failed,
+			),
+		},
+		"fails with bad event": {
+			event: registry.NewNodeEvent(
+				registry.RemovePointers(
+					registry.CreateTestNodes(1, &registry.TestNodeOptions{}),
+				)[0],
+				badEvent,
+			),
+		},
 	}
 
-	node := RemovePointers(CreateTestNodes(1, &TestNodeOptions{}))[0]
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+			errChan := make(chan error, 1)
 
-	tests := []test{
-		{
-			event: NewNodeEvent(node, Add),
-		},
-		{
-			event: NewNodeEvent(node, Remove),
-		},
-		{
-			event: NewNodeEvent(node, Failed),
-		},
-	}
+			nodeReg := registry.NewNodeRegistry()
+			subLister := new(mocks.SubscriberLister)
+			nodeMapper := new(mocks.NodeMapper)
+			nodeReg.SubscriberLister = subLister
+			nodeReg.NodeMapper = nodeMapper
 
-	for _, tc := range tests {
-		ctx, cancel := context.WithCancel(context.Background())
-		wg := &sync.WaitGroup{}
-		errChan := make(chan error)
-		defer wg.Add(1)
-		defer cancel()
+			subLister.On("CloseListeners").Return()
 
-		registry := NewNodeRegistry()
-
-		switch tc.event.Event {
-		case Remove:
-			registry.addNode(tc.event.Node)
-		case Failed:
-			registry.addNode(tc.event.Node)
-		}
-
-		go registry.RegisterNodes(ctx, wg, errChan)
-
-		in := registry.EventInChannel()
-		out := registry.SubscribeToEvents()
-
-		in <- *tc.event
-
-		select {
-		case e := <-out:
-			if e.Event != tc.event.Event {
-				t.Fatalf("expected type %s but got %s", tc.event.Event, e.Event)
+			switch test.event.Event {
+			case registry.Add:
+				nodeMapper.On("AddNode", test.event.Node).Return()
+				subLister.On(("ForwardEvent"), test.event).Return()
+			case registry.Remove:
+				nodeMapper.On("RemoveNode", mock.Anything).Return()
+				subLister.On(("ForwardEvent"), test.event).Return()
+			case registry.Failed:
+				nodeMapper.On("RemoveNode", mock.Anything).Return()
+				subLister.On(("ForwardEvent"), test.event).Return()
 			}
-		case <-time.After(time.Second * 3):
-			t.Fatal("didn't set current in time")
-		}
 
-		wg.Add(1)
-		waitChannel := make(chan struct{})
-		go func() {
+			done := make(chan struct{})
+			go func() {
+				nodeReg.RegisterNodes(ctx, wg, errChan)
+
+				nodeMapper.AssertExpectations(t)
+				subLister.AssertExpectations(t)
+
+				switch test.event.Event {
+				case registry.Add:
+					nodeMapper.AssertNumberOfCalls(t, "AddNode", 1)
+					subLister.AssertNumberOfCalls(t, "ForwardEvent", 1)
+				case registry.Remove:
+					nodeMapper.AssertNumberOfCalls(t, "RemoveNode", 1)
+					subLister.AssertNumberOfCalls(t, "ForwardEvent", 1)
+				case registry.Failed:
+					nodeMapper.AssertNumberOfCalls(t, "RemoveNode", 1)
+					subLister.AssertNumberOfCalls(t, "ForwardEvent", 1)
+				}
+
+				subLister.AssertNumberOfCalls(t, "CloseListeners", 1)
+
+				close(errChan)
+				errs := []error{}
+				for err := range errChan {
+					errs = append(errs, err)
+				}
+
+				if test.event.Event == badEvent {
+					assert.Len(errs, 1)
+				} else {
+					assert.Len(errs, 0)
+				}
+
+				close(done)
+			}()
+
+			nodeReg.EventInChannel() <- test.event
 			cancel()
-			wg.Wait()
-			close(waitChannel)
-		}()
 
-		select {
-		case <-waitChannel:
-			continue
-		case <-time.After(time.Second * 3):
-			t.Fatal("didn't complete wait group in time")
-		}
+			select {
+			case <-done:
+				break
+			case <-time.After(time.Second * 3):
+				t.Fatal("did not finish in time")
+			}
+
+		})
 	}
 }
