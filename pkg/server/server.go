@@ -8,36 +8,36 @@ import (
 	"github.com/platform-edn/courier/pkg/messaging"
 )
 
-type channelMapper interface {
+type ChannelMapper interface {
 	SubscribeToSubject(string) <-chan messaging.Message
 	Subscriptions(string) ([]chan messaging.Message, error)
 	CloseSubscriberChannels()
 	GenerateMessageChannels(string) (<-chan chan messaging.Message, error)
 }
 
-type messagingServer struct {
+type MessagingServer struct {
 	responseChannel chan messaging.ResponseInfo
-	channelMapper
+	ChannelMapper
 	messaging.UnimplementedMessageServer
 }
 
-func NewMessagingServer() *messagingServer {
-	s := &messagingServer{
+func NewMessagingServer() *MessagingServer {
+	s := &MessagingServer{
 		responseChannel: make(chan messaging.ResponseInfo),
-		channelMapper:   newChannelMap(),
+		ChannelMapper:   NewChannelMap(),
 	}
 
 	return s
 }
 
-func (s *messagingServer) ResponseChannel() <-chan messaging.ResponseInfo {
+func (s *MessagingServer) ResponseChannel() <-chan messaging.ResponseInfo {
 	return s.responseChannel
 }
 
-func (s *messagingServer) PublishMessage(ctx context.Context, request *messaging.PublishMessageRequest) (*messaging.PublishMessageResponse, error) {
+func (s *MessagingServer) PublishMessage(ctx context.Context, request *messaging.PublishMessageRequest) (*messaging.PublishMessageResponse, error) {
 	pub := messaging.NewPubMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
 
-	err := s.fanForwardMessages(ctx, pub.Subject, pub)
+	err := s.FanForwardMessages(ctx, pub.Subject, pub)
 	if err != nil {
 		return nil, fmt.Errorf("PublishMessage: %w", err)
 	}
@@ -47,7 +47,7 @@ func (s *messagingServer) PublishMessage(ctx context.Context, request *messaging
 	return &response, nil
 }
 
-func (s *messagingServer) RequestMessage(ctx context.Context, request *messaging.RequestMessageRequest) (*messaging.RequestMessageResponse, error) {
+func (s *MessagingServer) RequestMessage(ctx context.Context, request *messaging.RequestMessageRequest) (*messaging.RequestMessageResponse, error) {
 	req := messaging.NewReqMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
 
 	s.responseChannel <- messaging.ResponseInfo{
@@ -55,7 +55,7 @@ func (s *messagingServer) RequestMessage(ctx context.Context, request *messaging
 		NodeId:    request.Message.NodeId,
 	}
 
-	err := s.fanForwardMessages(ctx, req.Subject, req)
+	err := s.FanForwardMessages(ctx, req.Subject, req)
 	if err != nil {
 		return nil, fmt.Errorf("RequestMessage: %w", err)
 	}
@@ -65,10 +65,10 @@ func (s *messagingServer) RequestMessage(ctx context.Context, request *messaging
 	return &response, nil
 }
 
-func (s *messagingServer) ResponseMessage(ctx context.Context, request *messaging.ResponseMessageRequest) (*messaging.ResponseMessageResponse, error) {
+func (s *MessagingServer) ResponseMessage(ctx context.Context, request *messaging.ResponseMessageRequest) (*messaging.ResponseMessageResponse, error) {
 	resp := messaging.NewRespMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
 
-	err := s.fanForwardMessages(ctx, resp.Subject, resp)
+	err := s.FanForwardMessages(ctx, resp.Subject, resp)
 	if err != nil {
 		return nil, fmt.Errorf("ResponseMessage: %w", err)
 	}
@@ -78,7 +78,7 @@ func (s *messagingServer) ResponseMessage(ctx context.Context, request *messagin
 	return &response, nil
 }
 
-func (s *messagingServer) fanForwardMessages(ctx context.Context, subject string, msg messaging.Message) error {
+func (s *MessagingServer) FanForwardMessages(ctx context.Context, subject string, msg messaging.Message) error {
 	wg := &sync.WaitGroup{}
 
 	channels, err := s.GenerateMessageChannels(subject)

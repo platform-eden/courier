@@ -1,13 +1,14 @@
-package server
+package server_test
 
 import (
+	"fmt"
 	"testing"
+
+	"github.com/platform-edn/courier/pkg/messaging"
+	"github.com/platform-edn/courier/pkg/server"
+	"github.com/stretchr/testify/assert"
 )
 
-/**************************************************************
-Expected Outcomes:
-- subject in chanMap should have a channel for every time Add is called
-// **************************************************************/
 func TestChannelMap_Add(t *testing.T) {
 	type test struct {
 		channelCount int
@@ -21,64 +22,111 @@ func TestChannelMap_Add(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
-		chanMap := newChannelMap()
-		defer chanMap.CloseSubscriberChannels()
+	for i, tc := range tests {
+		t.Run(fmt.Sprintf("%v", i), func(t *testing.T) {
+			assert := assert.New(t)
+			chanMap := server.NewChannelMap()
+			defer chanMap.CloseSubscriberChannels()
 
-		for i := 0; i < tc.channelCount; i++ {
-			chanMap.SubscribeToSubject(tc.subject)
-		}
+			for i := 0; i < tc.channelCount; i++ {
+				chanMap.SubscribeToSubject(tc.subject)
+			}
 
-		if len(chanMap.SubjectChannels[tc.subject]) != tc.channelCount {
-			t.Fatalf("expected length of %s channels to be %v but got %v", tc.subject, tc.channelCount, len(chanMap.SubjectChannels[tc.subject]))
-		}
+			assert.Len(chanMap.SubjectChannels[tc.subject], tc.channelCount)
+		})
 	}
 }
 
-/**************************************************************
-Expected Outcomes:
-- should return a list of channels with a length equal to how many adds were done on the subject passed in
-- should return error if subject passed in isn't registered
-**************************************************************/
 func TestChannelMap_Subscriptions(t *testing.T) {
-	type test struct {
+	tests := map[string]struct {
 		addSubject          string
 		subscriptionSubject string
 		channelCount        int
-		expectedFailure     bool
-	}
-
-	tests := []test{
-		{
+		err                 error
+	}{
+		"all subscribers to a subject is returned": {
 			addSubject:          "test",
 			subscriptionSubject: "test",
 			channelCount:        10,
-			expectedFailure:     false,
+			err:                 nil,
 		},
-		{
+		"no subject error is returned": {
 			addSubject:          "test",
 			subscriptionSubject: "test1",
 			channelCount:        10,
-			expectedFailure:     true,
+			err:                 &server.UnregisteredChannelSubjectError{},
 		},
 	}
 
-	for _, tc := range tests {
-		chanMap := newChannelMap()
-		defer chanMap.CloseSubscriberChannels()
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			chanMap := server.NewChannelMap()
+			defer chanMap.CloseSubscriberChannels()
 
-		for i := 0; i < tc.channelCount; i++ {
-			chanMap.SubscribeToSubject(tc.addSubject)
-		}
+			for i := 0; i < test.channelCount; i++ {
+				chanMap.SubscribeToSubject(test.addSubject)
+			}
 
-		channels, err := chanMap.Subscriptions(tc.subscriptionSubject)
-		if err != nil && !tc.expectedFailure {
-			t.Fatalf("Subscriptions failed when it shouldn't have: %s", err)
-		}
+			channels, err := chanMap.Subscriptions(test.subscriptionSubject)
+			if test.err != nil {
+				errorType := test.err
+				assert.ErrorAs(err, &errorType)
+				return
+			}
 
-		if len(channels) != tc.channelCount && !tc.expectedFailure {
-			t.Fatalf("expected length of %s channels to be %v but got %v", tc.addSubject, tc.channelCount, len(channels))
-		}
+			assert.NoError(err)
+			assert.Len(channels, test.channelCount)
+		})
+	}
+}
 
+func TestChannelMap_GenerateMessageChannels(t *testing.T) {
+	tests := map[string]struct {
+		addSubject          string
+		subscriptionSubject string
+		channelCount        int
+		err                 error
+	}{
+		"all subscribers to a subject is returned": {
+			addSubject:          "test",
+			subscriptionSubject: "test",
+			channelCount:        10,
+			err:                 nil,
+		},
+		"no subject error is returned": {
+			addSubject:          "test",
+			subscriptionSubject: "test1",
+			channelCount:        10,
+			err:                 &server.UnregisteredChannelSubjectError{},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			chanMap := server.NewChannelMap()
+			defer chanMap.CloseSubscriberChannels()
+
+			for i := 0; i < test.channelCount; i++ {
+				chanMap.SubscribeToSubject(test.addSubject)
+			}
+
+			channels, err := chanMap.GenerateMessageChannels(test.subscriptionSubject)
+			if test.err != nil {
+				errorType := test.err
+				assert.ErrorAs(err, &errorType)
+				return
+			}
+
+			assert.NoError(err)
+
+			chanList := []chan messaging.Message{}
+			for channel := range channels {
+				chanList = append(chanList, channel)
+			}
+
+			assert.Len(chanList, test.channelCount)
+		})
 	}
 }

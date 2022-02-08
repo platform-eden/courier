@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -56,11 +57,42 @@ func Proto() error {
 
 // runs race tests
 func Race() error {
-	os.Chdir(baseDir)
+	coverage := "coverage.out"
 
-	err := sh.Run("go", "test", "-race", "-covermode=atomic", "-coverprofile=coverage.out", "./pkg/...")
+	err := sh.Run("go", "test", "-race", "-covermode=atomic", fmt.Sprintf("-coverprofile=%s", coverage), filepath.Join(baseDir, "pkg", "..."))
 	if err != nil {
-		return fmt.Errorf("failed unit test: %s", err)
+		return fmt.Errorf("Race: %s", err)
+	}
+
+	file, err := os.Open(filepath.Join(baseDir, coverage))
+	if err != nil {
+		return fmt.Errorf("Race: %s", err)
+	}
+
+	scanner := bufio.NewScanner(file)
+	scanner.Split(bufio.ScanLines)
+	var txtlines []string
+
+	for scanner.Scan() {
+		txtlines = append(txtlines, scanner.Text())
+	}
+
+	file.Close()
+
+	output := ""
+	for _, line := range txtlines {
+		if !strings.Contains(line, ".pb.") {
+			if output == "" {
+				output = line
+			} else {
+				output = fmt.Sprintf("%s\n%s", output, line)
+			}
+		}
+	}
+
+	err = os.WriteFile(filepath.Join(baseDir, coverage), []byte(output), 0755)
+	if err != nil {
+		return fmt.Errorf("Race: %s", err)
 	}
 
 	return nil

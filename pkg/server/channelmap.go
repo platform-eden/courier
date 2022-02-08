@@ -12,7 +12,7 @@ type ChannelMap struct {
 	Lock            lock.Locker
 }
 
-func newChannelMap() *ChannelMap {
+func NewChannelMap() *ChannelMap {
 	c := ChannelMap{
 		SubjectChannels: map[string][]chan messaging.Message{},
 		Lock:            lock.NewTicketLock(),
