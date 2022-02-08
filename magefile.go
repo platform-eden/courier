@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -28,7 +29,7 @@ func getMageDir() string {
 
 // updates grpc boilerplate
 func Proto() error {
-	protopath := filepath.Join(baseDir, "protobuf_files")
+	protopath := filepath.Join(baseDir, "proto")
 	// get files in proto path
 	files, err := ioutil.ReadDir(protopath)
 	if err != nil {
@@ -56,11 +57,42 @@ func Proto() error {
 
 // runs race tests
 func Race() error {
-	os.Chdir(baseDir)
+	coverage := "coverage.out"
 
-	err := sh.Run("go", "test", "-race", "-covermode=atomic", "-coverprofile=coverage.out", "./...")
+	err := sh.Run("go", "test", "-race", "-covermode=atomic", fmt.Sprintf("-coverprofile=%s", coverage), filepath.Join(baseDir, "pkg", "..."))
 	if err != nil {
-		return fmt.Errorf("failed unit test: %s", err)
+		return fmt.Errorf("Race: %s", err)
+	}
+
+	file, err := os.Open(filepath.Join(baseDir, coverage))
+	if err != nil {
+		return fmt.Errorf("Race: %s", err)
+	}
+
+	scanner := bufio.NewScanner(file)
+	scanner.Split(bufio.ScanLines)
+	var txtlines []string
+
+	for scanner.Scan() {
+		txtlines = append(txtlines, scanner.Text())
+	}
+
+	file.Close()
+
+	output := ""
+	for _, line := range txtlines {
+		if !strings.Contains(line, ".pb.") {
+			if output == "" {
+				output = line
+			} else {
+				output = fmt.Sprintf("%s\n%s", output, line)
+			}
+		}
+	}
+
+	err = ioutil.WriteFile(filepath.Join(baseDir, coverage), []byte(output), 0755)
+	if err != nil {
+		return fmt.Errorf("Race: %s", err)
 	}
 
 	return nil
@@ -76,4 +108,60 @@ func Fmt() error {
 	}
 
 	return nil
+}
+
+//creates mocks for pkg interfaces
+func Mock() error {
+	pkgDir := filepath.Join(baseDir, "pkg")
+	err := filepath.Walk(pkgDir, mockWalkFunction)
+	if err != nil {
+		return fmt.Errorf("Mock: %w", err)
+	}
+
+	return nil
+}
+
+func mockWalkFunction(subDir string, info os.FileInfo, err error) error {
+	if err != nil {
+		return fmt.Errorf("mockWalkFunction: %w", err)
+	}
+
+	pkgDir := filepath.Join(baseDir, "pkg")
+	if subDir == pkgDir {
+		return nil
+	}
+
+	isDir, err := isDirectory(subDir)
+	if err != nil {
+		return fmt.Errorf("mockWalkFunction: %w", err)
+	}
+
+	if isDir {
+		err = createMocks(subDir)
+		if err != nil {
+			return fmt.Errorf("mockWalkFunction: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func createMocks(subDir string) error {
+	os.Chdir(subDir)
+
+	err := sh.Run("mockery", "--all", "--case", "underscore")
+	if err != nil {
+		return fmt.Errorf("MakeMocks: %w", err)
+	}
+
+	return nil
+}
+
+func isDirectory(path string) (bool, error) {
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+
+	return fileInfo.IsDir(), nil
 }
