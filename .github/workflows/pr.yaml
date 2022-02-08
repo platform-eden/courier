@@ -14,12 +14,8 @@ jobs:
       - name: Set Up Go
         uses: actions/setup-go@v2
 
-      - name: Setup Go Path
-        run: echo "::set-env name=GOPATH::$(go env GOPATH)" && echo "::add-path::$(go env GOPATH)/bin"
-        shell: bash
-
       - name: Install Mockery
-        run: go get github.com/vektra/mockery/v2@latest
+        run: go install github.com/vektra/mockery && echo which mockery
 
       - name: Create Mocks
         uses: magefile/mage-action@v1
