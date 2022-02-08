@@ -18,7 +18,7 @@ jobs:
           go-version: '^1.17' 
 
       - name: Install Mockery
-        run: go install github.com/vektra/mockery
+        run: go install github.com/vektra/mockery && echo $GOBIN
 
       - name: Create Mocks
         uses: magefile/mage-action@v1
