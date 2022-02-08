@@ -90,7 +90,7 @@ func Race() error {
 		}
 	}
 
-	err = os.WriteFile(filepath.Join(baseDir, coverage), []byte(output), 0755)
+	err = ioutil.WriteFile(filepath.Join(baseDir, coverage), []byte(output), 0755)
 	if err != nil {
 		return fmt.Errorf("Race: %s", err)
 	}

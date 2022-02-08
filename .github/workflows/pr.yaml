@@ -14,7 +14,12 @@ jobs:
       - name: Set Up Go
         uses: actions/setup-go@v2
 
-      - name: Run Mage
+      - name: Create Mocks
+        uses: magefile/mage-action@v1
+        with:
+          args: mock
+
+      - name: Run Tests
         uses: magefile/mage-action@v1
         with:
           args: -v race
