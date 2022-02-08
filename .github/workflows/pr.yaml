@@ -11,12 +11,12 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v1
 
+      - name: Set Up Go
+        uses: actions/setup-go@v2
+
       - name: Setup Go Path
         run: echo "::set-env name=GOPATH::$(go env GOPATH)" && echo "::add-path::$(go env GOPATH)/bin"
         shell: bash
-
-      - name: Set Up Go
-        uses: actions/setup-go@v2
 
       - name: Install Mockery
         run: go get github.com/vektra/mockery/v2@latest
