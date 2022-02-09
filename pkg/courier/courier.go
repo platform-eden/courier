@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/platform-edn/courier/pkg/client"
-	"github.com/platform-edn/courier/pkg/discover"
+	"github.com/platform-edn/courier/pkg/eventer"
 	"github.com/platform-edn/courier/pkg/messaging"
 	"github.com/platform-edn/courier/pkg/registry"
 	"github.com/platform-edn/courier/pkg/server"
@@ -19,7 +19,7 @@ type NodeRegister interface {
 }
 
 type NodeEventer interface {
-	DiscoverNodeEvents(context.Context, chan registry.NodeEvent)
+	DiscoverNodeEvents(context.Context, chan registry.NodeEvent, chan error, *sync.WaitGroup)
 }
 
 type Messager interface {
@@ -40,7 +40,7 @@ type CourierService struct {
 	SubscribedSubjects  []string
 	BroadcastedSubjects []string
 	MessagerOptions     []client.ClientNodeOption
-	NodeEventerOptions  []discover.OperatorClientOption
+	NodeEventerOptions  []eventer.OperatorClientOption
 	NodeRegister
 	Messager
 	MessageReceiver
@@ -69,7 +69,7 @@ func Broadcasts(subjects ...string) CourierServiceOption {
 	}
 }
 
-func WithNodeEventerOptions(options ...discover.OperatorClientOption) CourierServiceOption {
+func WithNodeEventerOptions(options ...eventer.OperatorClientOption) CourierServiceOption {
 	return func(courier *CourierService) {
 		courier.NodeEventerOptions = append(courier.NodeEventerOptions, options...)
 	}
@@ -88,7 +88,7 @@ func NewCourierService(ctx context.Context, options ...CourierServiceOption) (*C
 		option(courier)
 	}
 
-	disco, err := discover.NewOperatorClient(courier.NodeEventerOptions...)
+	disco, err := eventer.NewOperatorClient(courier.NodeEventerOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("NewCourierService: %w", err)
 	}
@@ -101,14 +101,14 @@ func NewCourierService(ctx context.Context, options ...CourierServiceOption) (*C
 	courier.Messager = client.NewMessagingClient(in, courier.MessagerOptions...)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(3)
-	errchan := make(chan error)
+	wg.Add(4)
+	errs := make(chan error)
 	nodeEventListener := courier.SubscribeToEvents()
 	responseChannel := courier.ResponseChannel()
 
-	go courier.DiscoverNodeEvents(ctx, in)
-	go courier.RegisterNodes(ctx, wg, errchan)
-	go courier.ListenForNodeEvents(ctx, wg, nodeEventListener, errchan, courier.Id)
+	go courier.DiscoverNodeEvents(ctx, in, errs, wg)
+	go courier.RegisterNodes(ctx, wg, errs)
+	go courier.ListenForNodeEvents(ctx, wg, nodeEventListener, errs, courier.Id)
 	go courier.ListenForResponseInfo(ctx, wg, responseChannel)
 
 	return courier, nil

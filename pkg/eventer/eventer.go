@@ -3,6 +3,7 @@ package eventer
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/platform-edn/courier/pkg/proto"
 	"github.com/platform-edn/courier/pkg/registry"
@@ -12,6 +13,8 @@ import (
 type OperatorClient struct {
 	OperatorAddress   string
 	OperatorPort      string
+	Subscribed        []string
+	Broadcasted       []string
 	ConnectionOptions []grpc.DialOption
 	proto.DiscoverClient
 }
@@ -36,6 +39,18 @@ func WithConnectionOptions(options ...grpc.DialOption) OperatorClientOption {
 	}
 }
 
+func WithBroadcasted(subjects ...string) OperatorClientOption {
+	return func(client *OperatorClient) {
+		client.Broadcasted = append(client.Broadcasted, subjects...)
+	}
+}
+
+func WithSubscribed(subjects ...string) OperatorClientOption {
+	return func(client *OperatorClient) {
+		client.Subscribed = append(client.Subscribed, subjects...)
+	}
+}
+
 func NewOperatorClient(options ...OperatorClientOption) (*OperatorClient, error) {
 	client := &OperatorClient{}
 
@@ -57,6 +72,10 @@ func NewOperatorClient(options ...OperatorClientOption) (*OperatorClient, error)
 		err = &MissingOperatorClientParamError{
 			Param: "ConnectionOptions",
 		}
+	case len(client.Broadcasted) == 0 && len(client.Subscribed) == 0:
+		err = &MissingOperatorClientParamError{
+			Param: "Broadcasted and Subscribed Subjects",
+		}
 	default:
 		err = nil
 	}
@@ -74,4 +93,37 @@ func NewOperatorClient(options ...OperatorClientOption) (*OperatorClient, error)
 	return client, nil
 }
 
-func (client *OperatorClient) DiscoverNodeEvents(ctx context.Context, out chan registry.NodeEvent) {}
+func (client *OperatorClient) DiscoverNodeEvents(ctx context.Context, out chan registry.NodeEvent, errs chan error, wg *sync.WaitGroup) {
+	defer wg.Done()
+	eventTypes := NewEventTypeMap()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			stream, err := client.SubscribeToNodeEvents(ctx, &proto.EventStreamRequest{
+				SubscribedSubjects:  client.Subscribed,
+				BroadcastedSubjects: client.Broadcasted,
+			})
+			if err != nil {
+				errs <- err
+				break
+			}
+
+			for {
+				resp, err := stream.Recv()
+				if err != nil {
+					errs <- err
+					break
+				}
+
+				respNode := resp.Event.Node
+				out <- registry.NewNodeEvent(
+					*registry.NewNode(respNode.Id, respNode.Address, respNode.Port, respNode.SubscribedSubjects, respNode.BroadcastedSubjects),
+					eventTypes[resp.Event.EventType],
+				)
+			}
+		}
+	}
+}

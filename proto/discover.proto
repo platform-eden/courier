@@ -19,7 +19,7 @@ message Node {
 
 message NodeEvent {
     Node node = 1;
-    NodeEventType event = 2;
+    NodeEventType eventType = 2;
 }
 
 message EventStreamRequest {
