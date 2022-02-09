@@ -99,13 +99,16 @@ func (client *OperatorClient) DiscoverNodeEvents(ctx context.Context, out chan r
 
 	for {
 		select {
+		// make sure we should still be running
 		case <-ctx.Done():
 			return
+		// always attempt to get stream if we are supposed to be running
 		default:
 			stream, err := client.SubscribeToNodeEvents(ctx, &proto.EventStreamRequest{
 				SubscribedSubjects:  client.Subscribed,
 				BroadcastedSubjects: client.Broadcasted,
 			})
+			//break from select and loop to context check
 			if err != nil {
 				errs <- err
 				break
@@ -113,6 +116,7 @@ func (client *OperatorClient) DiscoverNodeEvents(ctx context.Context, out chan r
 
 			for {
 				resp, err := stream.Recv()
+				//break from for and loop to context check
 				if err != nil {
 					errs <- err
 					break
