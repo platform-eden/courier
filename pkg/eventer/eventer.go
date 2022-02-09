@@ -93,6 +93,8 @@ func NewOperatorClient(options ...OperatorClientOption) (*OperatorClient, error)
 	return client, nil
 }
 
+// DiscoverNodeEvents attempts to create a stream with the discovery server and forwards node events in to the system.  Will always
+// reattempt connection until context to close is callled.
 func (client *OperatorClient) DiscoverNodeEvents(ctx context.Context, out chan registry.NodeEvent, errs chan error, wg *sync.WaitGroup) {
 	defer wg.Done()
 	eventTypes := NewEventTypeMap()
