@@ -64,7 +64,7 @@ func NewOperatorClient(options ...OperatorClientOption) (*OperatorClient, error)
 		return nil, fmt.Errorf("NewOperatorClient: %w", err)
 	}
 
-	conn, err := grpc.Dial(fmt.Sprintf("%s:%s", client.OperatorAddress, client.OperatorPort), client.ConnectionOptions)
+	conn, err := grpc.Dial(fmt.Sprintf("%s:%s", client.OperatorAddress, client.OperatorPort), client.ConnectionOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("NewOperatorClient: %w", err)
 	}
