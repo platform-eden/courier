@@ -10,16 +10,27 @@ import (
 	"google.golang.org/grpc"
 )
 
+type EventStreamer interface {
+	StreamEvents(ctx context.Context, subscribed []string, broadcasted []string) error
+}
+
 type OperatorClient struct {
+	EventOut          chan registry.NodeEvent
 	OperatorAddress   string
 	OperatorPort      string
 	Subscribed        []string
 	Broadcasted       []string
 	ConnectionOptions []grpc.DialOption
-	proto.DiscoverClient
+	EventStreamer
 }
 
 type OperatorClientOption func(client *OperatorClient)
+
+func WithEventChannel(out chan registry.NodeEvent) OperatorClientOption {
+	return func(client *OperatorClient) {
+		client.EventOut = out
+	}
+}
 
 func WithOperatorAddress(address string) OperatorClientOption {
 	return func(client *OperatorClient) {
@@ -60,6 +71,10 @@ func NewOperatorClient(options ...OperatorClientOption) (*OperatorClient, error)
 
 	var err error
 	switch {
+	case client.EventOut == nil:
+		err = &MissingOperatorClientParamError{
+			Param: "EventOut",
+		}
 	case client.OperatorAddress == "":
 		err = &MissingOperatorClientParamError{
 			Param: "OperatorAddress",
@@ -88,47 +103,22 @@ func NewOperatorClient(options ...OperatorClientOption) (*OperatorClient, error)
 		return nil, fmt.Errorf("NewOperatorClient: %w", err)
 	}
 
-	client.DiscoverClient = proto.NewDiscoverClient(conn)
+	client.EventStreamer = NewEventStream(client.EventOut, proto.NewDiscoverClient(conn))
 
 	return client, nil
 }
 
-// DiscoverNodeEvents attempts to create a stream with the discovery server and forwards node events in to the system.  Will always
-// reattempt connection until context to close is callled.
 func (client *OperatorClient) DiscoverNodeEvents(ctx context.Context, out chan registry.NodeEvent, errs chan error, wg *sync.WaitGroup) {
 	defer wg.Done()
-	eventTypes := NewEventTypeMap()
 
 	for {
 		select {
-		// make sure we should still be running
 		case <-ctx.Done():
 			return
-		// always attempt to get stream if we are supposed to be running
 		default:
-			stream, err := client.SubscribeToNodeEvents(ctx, &proto.EventStreamRequest{
-				SubscribedSubjects:  client.Subscribed,
-				BroadcastedSubjects: client.Broadcasted,
-			})
-			//break from select and loop to context check
+			err := client.StreamEvents(ctx, client.Subscribed, client.Broadcasted)
 			if err != nil {
 				errs <- err
-				break
-			}
-
-			for {
-				resp, err := stream.Recv()
-				//break from for and loop to context check
-				if err != nil {
-					errs <- err
-					break
-				}
-
-				respNode := resp.Event.Node
-				out <- registry.NewNodeEvent(
-					*registry.NewNode(respNode.Id, respNode.Address, respNode.Port, respNode.SubscribedSubjects, respNode.BroadcastedSubjects),
-					eventTypes[resp.Event.EventType],
-				)
 			}
 		}
 	}

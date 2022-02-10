@@ -6,8 +6,6 @@ const (
 	Add NodeEventType = iota
 	Remove
 	Failed
-	// used for testing only
-	Unknown
 )
 
 type NodeEvent struct {
