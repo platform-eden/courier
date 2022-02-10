@@ -1,0 +1,36 @@
+syntax = "proto3";
+package proto;
+
+option go_package = "/pkg/proto";
+
+enum NodeEventType {
+    Added = 0;
+    Removed = 1;
+    Failed = 2;
+}
+
+message Node {
+    string id = 1;
+    string address = 2;
+    string port = 3;
+    repeated string subscribedSubjects = 4;
+    repeated string broadcastedSubjects = 5;
+}
+
+message NodeEvent {
+    Node node = 1;
+    NodeEventType eventType = 2;
+}
+
+message EventStreamRequest {
+    repeated string subscribedSubjects = 1;
+    repeated string broadcastedSubjects = 2;
+}
+
+message EventStreamResponse {
+    NodeEvent event = 1;
+}
+
+service Discover {
+    rpc SubscribeToNodeEvents (EventStreamRequest) returns(stream EventStreamResponse){}
+}

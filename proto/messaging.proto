@@ -1,7 +1,7 @@
 syntax = "proto3";
-package messaging;
+package proto;
 
-option go_package = "/pkg/messaging";
+option go_package = "/pkg/proto";
 
 message PublishMessage {
     string id = 1;

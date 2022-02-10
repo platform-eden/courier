@@ -7,6 +7,7 @@ import (
 
 	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	"github.com/platform-edn/courier/pkg/messaging"
+	"github.com/platform-edn/courier/pkg/proto"
 	"github.com/platform-edn/courier/pkg/registry"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -14,7 +15,7 @@ import (
 
 type ClientNode struct {
 	registry.Node
-	messaging.MessageClient
+	proto.MessageClient
 	CurrentId string
 }
 
@@ -76,7 +77,7 @@ func NewClientNode(node registry.Node, currrentId string, optionFuncs ...ClientN
 
 	n := &ClientNode{
 		Node:          node,
-		MessageClient: messaging.NewMessageClient(conn),
+		MessageClient: proto.NewMessageClient(conn),
 		CurrentId:     currrentId,
 	}
 
@@ -87,16 +88,16 @@ func (client *ClientNode) AttemptMessage(ctx context.Context, msg messaging.Mess
 	var err error
 	switch msg.Type {
 	case messaging.PubMessage:
-		_, err = client.PublishMessage(ctx, &messaging.PublishMessageRequest{
-			Message: &messaging.PublishMessage{
+		_, err = client.PublishMessage(ctx, &proto.PublishMessageRequest{
+			Message: &proto.PublishMessage{
 				Id:      msg.Id,
 				Subject: msg.Subject,
 				Content: msg.Content,
 			},
 		})
 	case messaging.ReqMessage:
-		_, err = client.RequestMessage(ctx, &messaging.RequestMessageRequest{
-			Message: &messaging.RequestMessage{
+		_, err = client.RequestMessage(ctx, &proto.RequestMessageRequest{
+			Message: &proto.RequestMessage{
 				Id:      msg.Id,
 				NodeId:  client.CurrentId,
 				Subject: msg.Subject,
@@ -104,8 +105,8 @@ func (client *ClientNode) AttemptMessage(ctx context.Context, msg messaging.Mess
 			},
 		})
 	case messaging.RespMessage:
-		_, err = client.ResponseMessage(ctx, &messaging.ResponseMessageRequest{
-			Message: &messaging.ResponseMessage{
+		_, err = client.ResponseMessage(ctx, &proto.ResponseMessageRequest{
+			Message: &proto.ResponseMessage{
 				Id:      msg.Id,
 				Subject: msg.Subject,
 				Content: msg.Content,

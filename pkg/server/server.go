@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/platform-edn/courier/pkg/messaging"
+	"github.com/platform-edn/courier/pkg/proto"
 )
 
 type ChannelMapper interface {
@@ -18,7 +19,7 @@ type ChannelMapper interface {
 type MessagingServer struct {
 	responseChannel chan messaging.ResponseInfo
 	ChannelMapper
-	messaging.UnimplementedMessageServer
+	proto.UnimplementedMessageServer
 }
 
 func NewMessagingServer() *MessagingServer {
@@ -34,7 +35,7 @@ func (s *MessagingServer) ResponseChannel() <-chan messaging.ResponseInfo {
 	return s.responseChannel
 }
 
-func (s *MessagingServer) PublishMessage(ctx context.Context, request *messaging.PublishMessageRequest) (*messaging.PublishMessageResponse, error) {
+func (s *MessagingServer) PublishMessage(ctx context.Context, request *proto.PublishMessageRequest) (*proto.PublishMessageResponse, error) {
 	pub := messaging.NewPubMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
 
 	err := s.FanForwardMessages(ctx, pub.Subject, pub)
@@ -42,12 +43,12 @@ func (s *MessagingServer) PublishMessage(ctx context.Context, request *messaging
 		return nil, fmt.Errorf("PublishMessage: %w", err)
 	}
 
-	response := messaging.PublishMessageResponse{}
+	response := proto.PublishMessageResponse{}
 
 	return &response, nil
 }
 
-func (s *MessagingServer) RequestMessage(ctx context.Context, request *messaging.RequestMessageRequest) (*messaging.RequestMessageResponse, error) {
+func (s *MessagingServer) RequestMessage(ctx context.Context, request *proto.RequestMessageRequest) (*proto.RequestMessageResponse, error) {
 	req := messaging.NewReqMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
 
 	s.responseChannel <- messaging.ResponseInfo{
@@ -60,12 +61,12 @@ func (s *MessagingServer) RequestMessage(ctx context.Context, request *messaging
 		return nil, fmt.Errorf("RequestMessage: %w", err)
 	}
 
-	response := messaging.RequestMessageResponse{}
+	response := proto.RequestMessageResponse{}
 
 	return &response, nil
 }
 
-func (s *MessagingServer) ResponseMessage(ctx context.Context, request *messaging.ResponseMessageRequest) (*messaging.ResponseMessageResponse, error) {
+func (s *MessagingServer) ResponseMessage(ctx context.Context, request *proto.ResponseMessageRequest) (*proto.ResponseMessageResponse, error) {
 	resp := messaging.NewRespMessage(request.Message.Id, request.Message.Subject, request.Message.GetContent())
 
 	err := s.FanForwardMessages(ctx, resp.Subject, resp)
@@ -73,7 +74,7 @@ func (s *MessagingServer) ResponseMessage(ctx context.Context, request *messagin
 		return nil, fmt.Errorf("ResponseMessage: %w", err)
 	}
 
-	response := messaging.ResponseMessageResponse{}
+	response := proto.ResponseMessageResponse{}
 
 	return &response, nil
 }

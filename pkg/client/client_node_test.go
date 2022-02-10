@@ -7,7 +7,8 @@ import (
 
 	"github.com/platform-edn/courier/pkg/client"
 	"github.com/platform-edn/courier/pkg/messaging"
-	"github.com/platform-edn/courier/pkg/messaging/mocks"
+	"github.com/platform-edn/courier/pkg/proto"
+	"github.com/platform-edn/courier/pkg/proto/mocks"
 	"github.com/platform-edn/courier/pkg/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -131,11 +132,11 @@ func TestClientNode_AttemptMessage(t *testing.T) {
 
 			switch test.messageType {
 			case messaging.PubMessage:
-				cli.On("PublishMessage", ctx, mock.Anything, mock.Anything).Return(&messaging.PublishMessageResponse{}, test.err)
+				cli.On("PublishMessage", ctx, mock.Anything, mock.Anything).Return(&proto.PublishMessageResponse{}, test.err)
 			case messaging.RespMessage:
-				cli.On("ResponseMessage", ctx, mock.Anything, mock.Anything).Return(&messaging.ResponseMessageResponse{}, test.err)
+				cli.On("ResponseMessage", ctx, mock.Anything, mock.Anything).Return(&proto.ResponseMessageResponse{}, test.err)
 			case messaging.ReqMessage:
-				cli.On("RequestMessage", ctx, mock.Anything, mock.Anything).Return(&messaging.RequestMessageResponse{}, test.err)
+				cli.On("RequestMessage", ctx, mock.Anything, mock.Anything).Return(&proto.RequestMessageResponse{}, test.err)
 			}
 
 			clientNode, err := client.NewClientNode(node, test.nodeId, test.options...)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/platform-edn/courier/pkg/messaging"
+	"github.com/platform-edn/courier/pkg/proto"
 	"github.com/platform-edn/courier/pkg/server"
 )
 
@@ -39,8 +40,8 @@ func TestMessageServer_PublishMessage(t *testing.T) {
 		mchan := ms.ChannelMapper.SubscribeToSubject(tc.chanMapSubject)
 
 		go func() {
-			m := messaging.PublishMessageRequest{
-				Message: &messaging.PublishMessage{
+			m := proto.PublishMessageRequest{
+				Message: &proto.PublishMessage{
 					Id:      uuid.NewString(),
 					Subject: tc.clientSubject,
 					Content: []byte("test"),
@@ -97,8 +98,8 @@ func TestMessageServer_ResponseMessage(t *testing.T) {
 		mchan := ms.ChannelMapper.SubscribeToSubject(tc.chanMapSubject)
 
 		go func() {
-			m := messaging.ResponseMessageRequest{
-				Message: &messaging.ResponseMessage{
+			m := proto.ResponseMessageRequest{
+				Message: &proto.ResponseMessage{
 					Id:      uuid.NewString(),
 					Subject: tc.clientSubject,
 					Content: []byte("test"),

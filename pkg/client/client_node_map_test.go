@@ -9,7 +9,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/platform-edn/courier/pkg/client"
 	"github.com/platform-edn/courier/pkg/messaging"
-	"github.com/platform-edn/courier/pkg/messaging/mocks"
+	"github.com/platform-edn/courier/pkg/proto"
+	"github.com/platform-edn/courier/pkg/proto/mocks"
 	"github.com/platform-edn/courier/pkg/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -210,7 +211,7 @@ func TestClientNodeMap_FanClientNodeMessaging(t *testing.T) {
 			defer cancel()
 			msg := messaging.NewPubMessage("messageId", "testSubject", []byte("testContent"))
 
-			cli.On("PublishMessage", ctx, mock.Anything, mock.Anything).Return(&messaging.PublishMessageResponse{}, test.err)
+			cli.On("PublishMessage", ctx, mock.Anything, mock.Anything).Return(&proto.PublishMessageResponse{}, test.err)
 
 			for _, id := range test.ids {
 				node := registry.RemovePointers(registry.CreateTestNodes(1, &registry.TestNodeOptions{
