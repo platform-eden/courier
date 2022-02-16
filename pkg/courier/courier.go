@@ -35,12 +35,17 @@ type MessageReceiver interface {
 	ResponseChannel() <-chan messaging.ResponseInfo
 }
 
+type ErrorHandler interface {
+	ReceiveErrors(chan error)
+}
+
 type CourierService struct {
 	Id                  string
 	SubscribedSubjects  []string
 	BroadcastedSubjects []string
 	MessagerOptions     []client.ClientNodeOption
 	NodeEventerOptions  []eventer.OperatorClientOption
+	ErrorHandler        ErrorHandler
 	NodeRegister
 	Messager
 	MessageReceiver
@@ -110,6 +115,7 @@ func NewCourierService(ctx context.Context, options ...CourierServiceOption) (*C
 	go courier.RegisterNodes(ctx, wg, errs)
 	go courier.ListenForNodeEvents(ctx, wg, nodeEventListener, errs, courier.Id)
 	go courier.ListenForResponseInfo(ctx, wg, responseChannel)
+	go courier.ErrorHandler.ReceiveErrors(errs)
 
 	return courier, nil
 }
